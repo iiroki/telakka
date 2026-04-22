@@ -1,0 +1,40 @@
+{
+  "name": "telakka",
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "pnpm gen:tauri && vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "gen:tauri": "cd src-tauri && cargo run --bin gen_bindings",
+    "check": "pnpm lint && pnpm format",
+    "check:fix": "pnpm lint:fix && pnpm format:fix",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write ."
+  },
+  "dependencies": {
+    "@primeuix/themes": "^2.0.3",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-opener": "^2",
+    "primeicons": "^7.0.0",
+    "primevue": "^4.5.5",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@tauri-apps/cli": "^2",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "eslint": "^10.2.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-vue": "^10.9.0",
+    "globals": "^17.5.0",
+    "prettier": "^3.8.3",
+    "typescript": "~5.6.2",
+    "typescript-eslint": "^8.59.0",
+    "vite": "^6.0.3",
+    "vue-tsc": "^2.1.10"
+  }
+}

@@ -1,0 +1,7 @@
+src/gen
+src-tauri
+dist
+pnpm-lock.yaml
+**/*.d.ts
+.claude
+.vscode
