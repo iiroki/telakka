@@ -2,18 +2,21 @@
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { commands, type DockerStatus } from '../gen/tauri'
+import { commands, type DockerStatus } from '../tauri/bindings.gen'
 import KeyValueTable from './common/KeyValueTable.vue'
+
+const DEFAULT_CONTEXT = 'default'
 
 const status = ref<DockerStatus | null>(null)
 const error = ref<string | null>(null)
 const statusDialogOpen = ref(false)
 
+// TODO: Move the status to Pinia store
 const POLL_MS = 5000
 let timer: ReturnType<typeof setInterval> | null = null
 
 const refreshStatus = async () => {
-  const res = await commands.status()
+  const res = await commands.getStatus()
   if (res.status === 'ok') {
     status.value = res.data
     error.value = null
@@ -29,9 +32,19 @@ const statusColor = computed(() => {
   return 'var(--p-green-500)'
 })
 
-const label = computed(() =>
-  status.value ? `Docker ${status.value.server?.version ?? '???'} (${status.value.client.context})` : 'Docker down',
-)
+const label = computed(() => {
+  const parts: (string | null)[] = ['Docker']
+  if (status.value) {
+    parts.push(
+      status.value.server?.version ?? '???',
+      status.value.client.context !== DEFAULT_CONTEXT ? `(${status.value.client.context})` : null,
+    )
+  } else {
+    parts.push('unavailable')
+  }
+
+  return parts.filter(Boolean).join(' ')
+})
 
 onMounted(() => {
   refreshStatus()
