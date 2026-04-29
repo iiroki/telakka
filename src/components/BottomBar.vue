@@ -1,30 +1,16 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { commands, type DockerStatus } from '../tauri/bindings.gen'
+import { computed, ref } from 'vue'
 import KeyValueTable from './common/KeyValueTable.vue'
+import { useBackendStore } from '../stores/backend'
 
 const DEFAULT_CONTEXT = 'default'
 
-const status = ref<DockerStatus | null>(null)
-const error = ref<string | null>(null)
 const statusDialogOpen = ref(false)
 
-// TODO: Move the status to Pinia store
-const POLL_MS = 5000
-let timer: ReturnType<typeof setInterval> | null = null
-
-const refreshStatus = async () => {
-  const res = await commands.getStatus()
-  if (res.status === 'ok') {
-    status.value = res.data
-    error.value = null
-  } else {
-    status.value = null
-    error.value = res.error
-  }
-}
+const { status, stats } = storeToRefs(useBackendStore())
 
 const statusColor = computed(() => {
   if (!status.value) return 'var(--p-red-500)'
@@ -46,15 +32,19 @@ const label = computed(() => {
   return parts.filter(Boolean).join(' ')
 })
 
-onMounted(() => {
-  refreshStatus()
-  timer = setInterval(refreshStatus, POLL_MS)
-})
-
-onUnmounted(() => {
-  if (timer) {
-    clearInterval(timer)
+const resourceUsage = computed(() => {
+  if (!stats.value) {
+    return null
   }
+
+  let cpuPerc = 0
+  let memPerc = 0
+  for (const s of stats.value) {
+    cpuPerc += s.cpuPercentage
+    memPerc += s.memPercentage
+  }
+
+  return { cpuPerc, memPerc }
 })
 </script>
 
@@ -65,7 +55,30 @@ onUnmounted(() => {
       <span>{{ label }}</span>
     </Button>
 
-    <Button :icon="'pi pi-cog'" text size="small" aria-label="Settings" :style="{ color: 'var(--p-text-color)' }" />
+    <div>
+      <Button text size="small" style="color: var(--p-text-color); margin-right: 0.5rem">
+        <span>
+          CPU:
+          <span style="display: inline-block; width: 6ch; text-align: right">{{
+            resourceUsage?.cpuPerc.toFixed(2) ?? '-'
+          }}</span>
+          %
+        </span>
+        <span>
+          Mem:
+          <span style="display: inline-block; width: 5ch">{{ resourceUsage?.memPerc.toFixed(2) ?? '-' }}</span>
+          %
+        </span>
+      </Button>
+      <Button
+        :icon="'pi pi-bell'"
+        text
+        size="small"
+        aria-label="Notifications"
+        :style="{ color: 'var(--p-text-color)' }"
+      />
+      <Button :icon="'pi pi-cog'" text size="small" aria-label="Settings" :style="{ color: 'var(--p-text-color)' }" />
+    </div>
   </div>
 
   <Dialog v-model:visible="statusDialogOpen" modal header="Docker | Status" :style="{ width: '30rem' }">
@@ -99,18 +112,25 @@ onUnmounted(() => {
           ]"
         />
       </section>
+      <section v-if="status.compose">
+        <h3>Compose</h3>
+        <KeyValueTable
+          :value-style="{ fontFamily: 'monospace' }"
+          :rows="[{ label: 'Version', value: status.compose ?? 'N/A' }]"
+        />
+      </section>
       <section v-else class="error">
         <h4>Server</h4>
-        <div>Daemon unreachable.</div>
+        <div>Server unreachable.</div>
       </section>
     </div>
     <div v-else class="details error">
-      <div>Docker unavailable.</div>
-      <pre v-if="error">{{ error }}</pre>
+      <div>Docker unavailable</div>
     </div>
   </Dialog>
 </template>
 
+// TODO: Review this code-generated crap...
 <style scoped>
 .bottom-bar {
   display: flex;

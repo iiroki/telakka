@@ -20,4 +20,5 @@
     - Docker status — opens status dialog
   - Right:
     - Resource overview (CPU, RAM) — opens resource usage page/dialog
+    - Notification icon (bell) — opens notifications page/dialog
     - Context menu — opens a popup with actions like "Settings", "About", etc.

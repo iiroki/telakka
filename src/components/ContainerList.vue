@@ -1,10 +1,18 @@
 <script setup lang="ts">
-import { Column, TreeTable, useToast } from 'primevue'
-import { onMounted, ref } from 'vue'
-import { commands, DockerComposeProject, DockerContainer, DockerContainerCommand } from '../tauri/bindings.gen'
-import { TreeNode } from 'primevue/treenode'
+import { Column, TreeTable } from 'primevue'
+import { computed } from 'vue'
+import { storeToRefs } from 'pinia'
+import {
+  DockerComposeProject,
+  DockerContainer,
+  DockerContainerAction,
+  DockerProjectAction,
+} from '../tauri/bindings.gen'
+import type { TreeNode } from 'primevue/treenode'
+import { useBackendStore } from '../stores/backend'
 import ContainerStateIcon from './common/ContainerStateIcon.vue'
 import ContainerActionButton from './common/ContainerActionButton.vue'
+import { useNotificationStore } from '../stores/notification'
 
 type KnownKeys<T> = {
   [K in keyof T as string extends K ? never : number extends K ? never : K]: T[K]
@@ -17,10 +25,19 @@ type TypedTreeNode<T> = Omit<KnownKeys<TreeNode>, 'data'> & {
 type ContainerNodeData = DockerContainer | DockerComposeProject
 type ContainerNode = TypedTreeNode<ContainerNodeData>
 
-const PROJECT_PREFIX = '__project__'
-// const POLL_MS = 1000
+type TooltipKey = 'state'
+type ContainerListState = {
+  readonly nodes: ContainerNode[]
+  /** Node key -> Tooltip key -> Tooltip value */
+  readonly tooltips: Map<string, Map<TooltipKey, string>>
+}
 
-const toast = useToast()
+const PROJECT_PREFIX = '__project__'
+
+const backend = useBackendStore()
+const { containers, projects } = storeToRefs(backend)
+const { runContainerAction, runProjectAction } = backend
+const { notify } = useNotificationStore()
 
 const isContainerTreeNode = (node: ContainerNode): node is ContainerNode => 'state' in node.data
 const isContainerNodeData = (data: ContainerNodeData): data is DockerContainer => 'id' in data
@@ -37,48 +54,42 @@ const getDisplayName = (data: ContainerNodeData): string => {
   return isProjectNodeData(data) ? data.project : '???'
 }
 
-const handleAction = async (action: DockerContainerCommand, data: ContainerNodeData) => {
-  // TODO?
-  toast.add({
-    severity: 'info',
-    summary: `TODO — Action: ${action}, Target: ${getDisplayName(data)} (${isContainerNodeData(data) ? 'container' : 'project'})`,
-    life: 3000,
+const handleAction = async (action: DockerContainerAction | DockerProjectAction, data: ContainerNodeData) => {
+  notify({
+    level: 'info',
+    title: `TODO — Action: ${action}, Target: ${getDisplayName(data)} (${isContainerNodeData(data) ? 'container' : 'project'})`,
+    toastMs: 3000,
   })
 
   if (isContainerNodeData(data)) {
-    await commands.runContainerCommand(action, data.id)
+    await runContainerAction(action as DockerContainerAction, data.id)
+  } else if (isProjectNodeData(data)) {
+    await runProjectAction(action as DockerProjectAction, data.project)
   }
 }
 
-const nodes = ref<TypedTreeNode<ContainerNodeData>[]>([])
-onMounted(async () => {
-  const result = await commands.getContainers()
-  if (result.status === 'error') {
-    console.error(result.error)
-    return
-  }
-
-  const projects = new Map<string, DockerComposeProject>()
-  result.data.projects.forEach((p) => projects.set(p.project, p))
+const state = computed<ContainerListState>(() => {
+  const projectMap = new Map<string, DockerComposeProject>()
+  projects.value.forEach((p) => projectMap.set(p.project, p))
 
   // IDEA: Make it possible to toggle the project grouping on/off?
-  const output: ContainerNode[] = []
-  for (const container of result.data.containers) {
+  const nodes: ContainerNode[] = []
+  for (const container of containers.value) {
     let projectNode: TypedTreeNode<DockerComposeProject> | undefined
     if (container.compose) {
       const key = PROJECT_PREFIX + container.compose.project
-      const node = output.find((i) => i.key === key)
+      const node = nodes.find((i) => i.key === key)
       if (node && isProjectNode(node)) {
         projectNode = node
       } else {
-        const project = projects.get(container.compose.project)
+        const project = projectMap.get(container.compose.project)
         projectNode = {
           key,
           data: project ?? { project: '???', state: 'unknown' }, // Do we need to handle missing projects?
           leaf: false,
         }
 
-        output.push(projectNode)
+        nodes.push(projectNode)
       }
     }
 
@@ -96,17 +107,17 @@ onMounted(async () => {
       projectNode.children.push({ ...containerNode, styleClass: 'treetable-child-tint' })
     } else {
       // Standalone container
-      output.push(containerNode)
+      nodes.push(containerNode)
     }
   }
 
-  nodes.value = output
+  return { nodes, tooltips: new Map() } // TODO: Tooltips
 })
 </script>
 
 // TODO: Make the split button main action start/stop based on the state // TODO: Child row tint
 <template>
-  <TreeTable :value="nodes" :indentation="0">
+  <TreeTable :value="state.nodes" :indentation="0">
     <Column :expander="true" :style="{ width: '1%' }" />
     <Column header="State" :style="{ width: '1%' }" :header-style="{ textAlign: 'center' }">
       <template #body="{ node }">
@@ -115,7 +126,9 @@ onMounted(async () => {
             v-tooltip.top="
               [
                 node.data.state,
-                isContainerNodeData(node.data) ? `${node.data.status} — ${node.data.statusDetail}` : null,
+                // isContainerNodeData(node.data) ? `${node.data.status} — ${node.data.statusDetail}` : null,
+                isContainerNodeData(node.data) ? node.data.status : null,
+                isContainerNodeData(node.data) ? node.data.statusDetail : null,
               ]
                 .filter(Boolean)
                 .join('\n')
@@ -125,7 +138,7 @@ onMounted(async () => {
             <ContainerStateIcon
               :type="isProjectNode(node) ? 'project' : 'container'"
               :state="node.data.state"
-              :style="{ fontSize: '1.5rem', fontWeight: 600 }"
+              :style="{ fontSize: '1.5rem' }"
             />
           </span>
         </template>

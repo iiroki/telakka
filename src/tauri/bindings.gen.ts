@@ -6,8 +6,11 @@ import { invoke as __TAURI_INVOKE } from '@tauri-apps/api/core'
 export const commands = {
   getStatus: () => typedError<DockerStatus, string>(__TAURI_INVOKE('get_status')),
   getContainers: () => typedError<DockerContainerResult, string>(__TAURI_INVOKE('get_containers')),
-  runContainerCommand: (command: DockerContainerCommand, id: string) =>
-    typedError<null, string>(__TAURI_INVOKE('run_container_command', { command, id })),
+  getContainerStats: () => typedError<DockerContainerStats[], string>(__TAURI_INVOKE('get_container_stats')),
+  runContainerAction: (command: DockerContainerAction, id: string) =>
+    typedError<null, string>(__TAURI_INVOKE('run_container_action', { command, id })),
+  runProjectAction: (command: DockerProjectAction, project: string) =>
+    typedError<null, string>(__TAURI_INVOKE('run_project_action', { command, project })),
 }
 
 /* Types */
@@ -40,9 +43,24 @@ export type DockerContainer = {
   platform: DockerContainerPlatform
   // Docker Compose info, if available.
   compose: DockerContainerComposeInfo | null
+  /**
+   *  Receipt acts as a change token for the container — it's updated whenever the container changes,
+   *  allowing easier change tracking without having to compare all fields.
+   */
+  receipt: string | null
+  /**
+   *  Durable receipt is a receipt that remains unchanged across transient field updates,
+   *  such as status changing from `"Up 10 seconds"` to `"Up 11 seconds"`.
+   *
+   *  Bumps only when structural fields change.
+   *  Useful when consumers need stable container identity across polls and shouldn't react to cosmetic churn.
+   *
+   *  Transient fields: raw state, status, status detail. (should these be provided by the frontend instead?)
+   */
+  receiptDurable: string | null
 }
 
-export type DockerContainerCommand = 'unknown' | 'start' | 'stop' | 'restart' | 'pause' | 'remove'
+export type DockerContainerAction = 'unknown' | 'start' | 'stop' | 'restart' | 'pause' | 'remove'
 
 export type DockerContainerComposeInfo = {
   // Docker Compose project name.
@@ -76,11 +94,27 @@ export type DockerContainerState =
   // Docker Compose state only — indicates that some containers in the project are running, but not all.
   | 'partial'
 
+export type DockerContainerStats = {
+  // Container ID.
+  id: string
+  cpuPercentage: number
+  memPercentage: number
+  memUsageCurrent: string | null
+  memUsageAvailable: string | null
+  blockIoCurrent: string | null
+  blockIoAvailable: string | null
+  netIoCurrent: string | null
+  netIoAvailable: string | null
+  pids: number
+}
+
 export type DockerNetworkBinding = {
   hostPort: number | null
   containerPort: number
   protocol: string
 }
+
+export type DockerProjectAction = 'unknown' | 'up' | 'down' | 'start' | 'stop' | 'restart' | 'pause'
 
 // Docker server/engine version info.
 export type DockerServerVersion = {
@@ -96,6 +130,8 @@ export type DockerStatus = {
   client: DockerClientVersion
   // This can be unavailable if the Docker daemon is unavailable.
   server: DockerServerVersion | null
+  // Docker Compose version, if available.
+  compose: string | null
 }
 
 /* Tauri Specta runtime */

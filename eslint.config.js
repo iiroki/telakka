@@ -23,6 +23,7 @@ export default typescriptEslint.config(
     },
     rules: {
       // See ".prettierrc.json" first
+      '@typescript-eslint/no-unused-vars': 'warn',
     },
   },
   eslintConfigPrettier,

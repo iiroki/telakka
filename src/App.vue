@@ -1,13 +1,24 @@
 <script setup lang="ts">
 import { Toast } from 'primevue'
 import BottomBar from './components/BottomBar.vue'
-import ContainerList from './components/ContainerList.vue'
+import { useBackendMgmtStore } from './stores/backend-mgmt'
+import { onMounted, onUnmounted } from 'vue'
+import TabContainer from './components/TabContainer.vue'
+
+const backendMgmt = useBackendMgmtStore()
+onMounted(() => {
+  backendMgmt.start()
+})
+
+onUnmounted(() => {
+  backendMgmt.stop()
+})
 </script>
 
 <template>
   <div class="app">
     <main>
-      <ContainerList />
+      <TabContainer />
     </main>
     <BottomBar />
   </div>

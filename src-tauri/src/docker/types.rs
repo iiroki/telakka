@@ -2,7 +2,11 @@
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
+
+pub trait DockerCommand {
+    fn as_command(&self) -> Result<&'static str, String>;
+}
 
 /// Docker client version info.
 #[derive(Type, Serialize)]
@@ -34,10 +38,12 @@ pub struct DockerStatus {
     pub client: DockerClientVersion,
     /// This can be unavailable if the Docker daemon is unavailable.
     pub server: Option<DockerServerVersion>,
+    /// Docker Compose version, if available.
+    pub compose: Option<String>,
 }
 
 /// Docker container state — including a partial state for groups/projects.
-#[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[derive(Type, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum DockerContainerState {
     #[default]
@@ -53,7 +59,7 @@ pub enum DockerContainerState {
     Partial,
 }
 
-#[derive(Type, Serialize)]
+#[derive(Type, Serialize, Hash)]
 #[serde(rename_all = "camelCase")]
 pub struct DockerContainer {
     pub id: String,
@@ -65,15 +71,28 @@ pub struct DockerContainer {
     pub status: String,
     pub status_detail: Option<String>,
 
-    pub labels: HashMap<String, Option<String>>,
+    pub labels: BTreeMap<String, Option<String>>,
     pub ports: Vec<DockerNetworkBinding>,
     pub platform: DockerContainerPlatform,
 
     /// Docker Compose info, if available.
     pub compose: Option<DockerContainerComposeInfo>,
+
+    /// Receipt acts as a change token for the container — it's updated whenever the container changes,
+    /// allowing easier change tracking without having to compare all fields.
+    pub receipt: Option<String>,
+
+    /// Durable receipt is a receipt that remains unchanged across transient field updates,
+    /// such as status changing from `"Up 10 seconds"` to `"Up 11 seconds"`.
+    ///
+    /// Bumps only when structural fields change.
+    /// Useful when consumers need stable container identity across polls and shouldn't react to cosmetic churn.
+    ///
+    /// Transient fields: raw state, status, status detail. (should these be provided by the frontend instead?)
+    pub receipt_durable: Option<String>,
 }
 
-#[derive(Type, Serialize)]
+#[derive(Type, Serialize, Hash)]
 #[serde(rename_all = "camelCase")]
 pub struct DockerNetworkBinding {
     pub host_port: Option<u16>,
@@ -81,7 +100,7 @@ pub struct DockerNetworkBinding {
     pub protocol: String,
 }
 
-#[derive(Type, Serialize)]
+#[derive(Type, Serialize, Hash)]
 #[serde(rename_all = "camelCase")]
 pub struct DockerContainerPlatform {
     pub architecture: String,
@@ -96,7 +115,7 @@ pub struct DockerComposeProject {
     pub state: DockerContainerState,
 }
 
-#[derive(Type, Serialize)]
+#[derive(Type, Serialize, Hash)]
 #[serde(rename_all = "camelCase")]
 pub struct DockerContainerComposeInfo {
     /// Docker Compose project name.
@@ -105,9 +124,29 @@ pub struct DockerContainerComposeInfo {
     pub service: String,
 }
 
+#[derive(Type, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DockerContainerStats {
+    /// Container ID.
+    pub id: String,
+
+    pub cpu_percentage: f32,
+    pub mem_percentage: f32,
+    pub mem_usage_current: Option<String>,
+    pub mem_usage_available: Option<String>,
+
+    pub block_io_current: Option<String>,
+    pub block_io_available: Option<String>,
+
+    pub net_io_current: Option<String>,
+    pub net_io_available: Option<String>,
+
+    pub pids: i32,
+}
+
 #[derive(Type, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
-pub enum DockerContainerCommand {
+pub enum DockerContainerAction {
     #[default]
     Unknown,
     Start,
@@ -115,6 +154,46 @@ pub enum DockerContainerCommand {
     Restart,
     Pause,
     Remove,
+}
+
+impl DockerCommand for DockerContainerAction {
+    fn as_command(&self) -> Result<&'static str, String> {
+        Ok(match self {
+            DockerContainerAction::Start => "start",
+            DockerContainerAction::Stop => "stop",
+            DockerContainerAction::Restart => "restart",
+            DockerContainerAction::Pause => "pause",
+            DockerContainerAction::Remove => "rm",
+            _ => return Err(format!("Unknown Docker container action: {:?}", self)),
+        })
+    }
+}
+
+#[derive(Type, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum DockerProjectAction {
+    #[default]
+    Unknown,
+    Up,
+    Down,
+    Start,
+    Stop,
+    Restart,
+    Pause,
+}
+
+impl DockerCommand for DockerProjectAction {
+    fn as_command(&self) -> Result<&'static str, String> {
+        Ok(match self {
+            DockerProjectAction::Up => "up",
+            DockerProjectAction::Down => "down",
+            DockerProjectAction::Start => "start",
+            DockerProjectAction::Stop => "stop",
+            DockerProjectAction::Restart => "restart",
+            DockerProjectAction::Pause => "pause",
+            _ => return Err(format!("Unknown Docker project action: {:?}", self)),
+        })
+    }
 }
 
 //
