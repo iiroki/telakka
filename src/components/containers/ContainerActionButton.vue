@@ -4,15 +4,17 @@ import { computed, ref } from 'vue'
 import { DockerComposeProject, DockerContainer, DockerContainerAction } from '../../tauri/bindings.gen'
 import { MenuItem } from 'primevue/menuitem'
 
-const isProject = (data: DockerContainer | DockerComposeProject): data is DockerComposeProject => 'project' in data
+type ContainerStateData = Pick<DockerContainer, 'state'> | Pick<DockerComposeProject, 'state' | 'project'>
 
 const props = defineProps<{
-  readonly data: DockerContainer | DockerComposeProject
+  readonly data: ContainerStateData
 }>()
 
 const emit = defineEmits<{
   (e: 'action', action: DockerContainerAction): void
 }>()
+
+const isProject = (data: ContainerStateData): boolean => 'project' in data
 
 const menuRef = ref<InstanceType<typeof Menu> | null>(null)
 const mainAction = computed<DockerContainerAction>(() => (props.data.state !== 'running' ? 'start' : 'stop'))

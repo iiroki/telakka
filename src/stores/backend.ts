@@ -9,7 +9,6 @@ import {
   DockerStatus,
 } from '../tauri/bindings.gen'
 import { ref } from 'vue'
-import { log } from '../utils/log'
 import { useNotificationStore } from './notification'
 
 type UpdatedAt = {
@@ -24,6 +23,10 @@ export const useBackendStore = defineStore(KEY, () => {
   const projects = ref<DockerComposeProject[]>([])
   const stats = ref<DockerContainerStats[]>([])
   const { notify } = useNotificationStore()
+
+  const findContainer = (id: string): DockerContainer | null => containers.value.find((c) => c.id === id) ?? null
+  const findProject = (name: string): DockerComposeProject | null =>
+    projects.value.find((p) => p.project === name) ?? null
 
   const runContainerAction = async (action: DockerContainerAction, id: string): Promise<boolean> => {
     try {
@@ -56,11 +59,23 @@ export const useBackendStore = defineStore(KEY, () => {
     try {
       const result = await commands.runProjectAction(action, project)
       if (result.status !== 'ok') {
-        log.warn(`Docker project command failed: ${result.status} — ${result.error}`)
+        notify({
+          level: 'warn',
+          title: `Docker project command failed — Status: ${result.status}`,
+          content: result.error,
+          toastMs: 10_000,
+        })
+
         return false
       }
     } catch (err) {
-      log.error(`Docker project command error: ${err}`)
+      notify({
+        level: 'warn',
+        title: 'Docker project command error',
+        content: err instanceof Error ? err.message : String(err),
+        toastMs: 10_000,
+      })
+
       return false
     }
 
@@ -68,10 +83,16 @@ export const useBackendStore = defineStore(KEY, () => {
   }
 
   return {
+    /** Docker status. */
     status,
+    /** Docker containers — sorted by name. */
     containers,
+    /** Docker Compose projects — sorted by name. */
     projects,
+    /** Docker container statistics. */
     stats,
+    findContainer,
+    findProject,
     runContainerAction,
     runProjectAction,
   }

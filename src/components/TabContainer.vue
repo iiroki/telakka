@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Button, Tab, TabList, TabPanel, TabPanels, Tabs } from 'primevue'
-import ContainerList from './ContainerList.vue'
+import ContainerList from './containers/ContainerList.vue'
 
 const TAB_DEFAULT = '__default__'
 </script>

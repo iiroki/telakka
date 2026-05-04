@@ -15,6 +15,7 @@ export const useBackendMgmtStore = defineStore(`${KEY}-mgmt`, () => {
 
   let statusPollId: number | undefined
   let containerPollId: number | undefined
+  let statPollId: number | undefined
 
   const startStatusPoller = () => {
     log.info('Starting status poller...')
@@ -29,7 +30,7 @@ export const useBackendMgmtStore = defineStore(`${KEY}-mgmt`, () => {
         }
       },
       POLL_MS,
-      true,
+      { instant: true },
     )
   }
 
@@ -40,40 +41,34 @@ export const useBackendMgmtStore = defineStore(`${KEY}-mgmt`, () => {
       async () => {
         const result = await commands.getContainers()
         if (result.status === 'ok') {
-          // store.containers = result.data.containers
           store.containers = mergeContainers(store.containers, result.data.containers)
           store.projects = mergeProjects(store.projects, result.data.projects)
+        } else {
+          log.warn(`Docker containers error: ${result.error}`)
         }
       },
       POLL_MS,
-      true,
+      { instant: true },
     )
   }
 
   // Dockers stats will block until the next batch is ready — we can safely keep spamming the command
   const startStatLoop = () => {
     log.info('Starting stat loop...')
-    const getStats = async () => {
-      window.setTimeout(async () => {
-        if (!started.value) {
-          return
+    clearInterval(statPollId)
+    statPollId = createSafeInterval(
+      async () => {
+        const result = await commands.getContainerStats()
+        if (result.status === 'ok') {
+          store.stats = result.data
+        } else {
+          log.warn(`Docker stats error: ${result.error}`)
+          throw new Error(result.error)
         }
-
-        try {
-          const result = await commands.getContainerStats()
-          if (result.status === 'ok') {
-            store.stats = result.data
-          }
-        } catch (err) {
-          // Log error here?
-          await new Promise((resolve) => setTimeout(resolve, BACKOFF_MS))
-        }
-
-        getStats() // Keep going until cancelled
-      })
-    }
-
-    getStats()
+      },
+      0,
+      { instant: true, backoffMs: BACKOFF_MS },
+    )
   }
 
   const start = () => {
@@ -94,6 +89,7 @@ export const useBackendMgmtStore = defineStore(`${KEY}-mgmt`, () => {
     started.value = false
     clearInterval(statusPollId)
     clearInterval(containerPollId)
+    clearInterval(statPollId)
     log.info('Backend services stopped')
   }
 

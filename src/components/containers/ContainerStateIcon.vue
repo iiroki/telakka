@@ -12,10 +12,10 @@ const ICONS: Record<ContainerStateType, string> = {
 const STATE_COLORS: Record<DockerContainerState, string> = {
   // Containers
   created: 'var(--p-yellow-500)',
-  restarting: 'var(--p-yellow-500)',
   running: 'var(--p-green-500)',
-  paused: 'var(--p-blue-500)',
   exited: 'var(--p-red-500)',
+  restarting: 'var(--p-yellow-500)',
+  paused: 'var(--p-blue-500)',
   dead: 'var(--p-gray-700)',
   removing: 'var(--p-gray-700)',
   // Projects

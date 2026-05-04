@@ -190,7 +190,7 @@ pub fn run_project_action(action: &DockerProjectAction, project: &str) -> Result
         .arg(command)
         .log_prefix(log::Level::Info, "Docker project action");
 
-    let project_file = extract_project_config_file(&project_container)
+    let _project_file = extract_project_config_file(&project_container)
         .ok_or_else(|| format!("Project config file not found: {}", project))?;
     // TODO — Navigate to the project dir and run commands
 
