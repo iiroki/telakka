@@ -6,7 +6,7 @@ const TAB_DEFAULT = '__default__'
 </script>
 
 <template>
-  <Tabs :value="TAB_DEFAULT" scrollable>
+  <Tabs :value="TAB_DEFAULT" scrollable class="tab-container">
     <TabList>
       <Tab :value="TAB_DEFAULT">
         <span style="font-weight: bold">Containers</span>
@@ -22,7 +22,17 @@ const TAB_DEFAULT = '__default__'
 </template>
 
 <style scoped>
+.tab-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
 :deep(.p-tabpanels) {
   padding: 0;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 </style>

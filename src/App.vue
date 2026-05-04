@@ -34,7 +34,10 @@ onUnmounted(() => {
 
 main {
   flex: 1;
-  overflow: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 </style>
 
@@ -49,6 +52,8 @@ body,
   margin: 0;
   padding: 0;
   height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
   font-family: 'Inter Variable', 'Inter', sans-serif;
   -webkit-font-smoothing: auto;
 }
