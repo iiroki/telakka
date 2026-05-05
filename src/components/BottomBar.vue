@@ -50,13 +50,13 @@ const resourceUsage = computed(() => {
 
 <template>
   <div class="bottom-bar">
-    <Button class="status-btn" text size="small" @click="statusDialogOpen = true">
+    <Button class="status-btn" text severity="secondary" size="small" @click="statusDialogOpen = true">
       <span class="dot" :style="{ background: statusColor }" />
       <span>{{ label }}</span>
     </Button>
 
     <div>
-      <Button text size="small" style="color: var(--p-text-color); margin-right: 0.5rem">
+      <Button text size="small" severity="secondary">
         <span>
           CPU:
           <span style="display: inline-block; width: 6ch; text-align: right">{{
@@ -70,14 +70,8 @@ const resourceUsage = computed(() => {
           %
         </span>
       </Button>
-      <Button
-        :icon="'pi pi-bell'"
-        text
-        size="small"
-        aria-label="Notifications"
-        :style="{ color: 'var(--p-text-color)' }"
-      />
-      <Button :icon="'pi pi-cog'" text size="small" aria-label="Settings" :style="{ color: 'var(--p-text-color)' }" />
+      <Button :icon="'pi pi-bell'" text severity="secondary" size="small" aria-label="Notifications" />
+      <Button :icon="'pi pi-cog'" text severity="secondary" size="small" aria-label="Settings" />
     </div>
   </div>
 

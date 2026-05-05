@@ -42,6 +42,16 @@ main {
 </style>
 
 <style>
+:root {
+  --nav-background: color-mix(in srgb, var(--p-content-background) 95%, var(--p-gray-400));
+  border-top: 1px solid color-mix(in srgb, var(--p-content-background) 90%, var(--p-gray-900));
+
+  @media (prefers-color-scheme: dark) {
+    --nav-background: color-mix(in srgb, var(--p-content-background) 80%, black);
+    border-top: 1px solid var(--nav-background);
+  }
+}
+
 html {
   font-size: 14px;
 }
