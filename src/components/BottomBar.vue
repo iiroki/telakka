@@ -5,11 +5,13 @@ import Dialog from 'primevue/dialog'
 import { computed, ref } from 'vue'
 import KeyValueTable from './common/KeyValueTable.vue'
 import { useBackendStore } from '../stores/backend'
+import { useTabStore } from '../stores/tab'
 
 const DEFAULT_CONTEXT = 'default'
 
 const statusDialogOpen = ref(false)
 
+const { openOrCreateTab } = useTabStore()
 const { status, stats } = storeToRefs(useBackendStore())
 
 const statusColor = computed(() => {
@@ -56,7 +58,7 @@ const resourceUsage = computed(() => {
     </Button>
 
     <div>
-      <Button text size="small" severity="secondary">
+      <Button text size="small" severity="secondary" @click="openOrCreateTab({ key: '_resource-monitor' })">
         <span>
           CPU:
           <span style="display: inline-block; width: 6ch; text-align: right">{{
@@ -70,8 +72,22 @@ const resourceUsage = computed(() => {
           %
         </span>
       </Button>
-      <Button :icon="'pi pi-bell'" text severity="secondary" size="small" aria-label="Notifications" />
-      <Button :icon="'pi pi-cog'" text severity="secondary" size="small" aria-label="Settings" />
+      <Button
+        icon="pi pi-bell"
+        text
+        severity="secondary"
+        size="small"
+        aria-label="Notifications"
+        @click="openOrCreateTab('_notifications')"
+      />
+      <Button
+        icon="pi pi-cog"
+        text
+        severity="secondary"
+        size="small"
+        aria-label="Settings"
+        @click="openOrCreateTab({ key: '_settings' })"
+      />
     </div>
   </div>
 

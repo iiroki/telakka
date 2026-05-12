@@ -11,6 +11,9 @@ export const commands = {
     typedError<null, string>(__TAURI_INVOKE('run_container_action', { command, id })),
   runProjectAction: (command: DockerProjectAction, project: string) =>
     typedError<null, string>(__TAURI_INVOKE('run_project_action', { command, project })),
+  storageReadJson: (key: string) => typedError<string | null, string>(__TAURI_INVOKE('storage_read_json', { key })),
+  storageWriteJson: (key: string, value: string) =>
+    typedError<null, string>(__TAURI_INVOKE('storage_write_json', { key, value })),
 }
 
 /* Types */

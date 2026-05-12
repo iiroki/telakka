@@ -18,6 +18,7 @@ export type NotificationMessage = {
    * Whether to also log the notification with the logger (default: `true`).
    */
   readonly log?: boolean
+  // Error?
 }
 
 export const useNotificationStore = defineStore('notification', () => {

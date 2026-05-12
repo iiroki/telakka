@@ -1,4 +1,5 @@
 mod docker;
+mod storage;
 mod utils;
 
 use docker::commands as DockerCommands;
@@ -6,6 +7,7 @@ use docker::types::{
     DockerContainerAction, DockerContainerResult, DockerContainerStats, DockerProjectAction,
     DockerStatus,
 };
+use storage::{storage_read_json, storage_write_json};
 use tauri_specta::{collect_commands, Builder};
 
 #[tauri::command]
@@ -59,6 +61,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
         get_container_stats,
         run_container_action,
         run_project_action,
+        storage_read_json,
+        storage_write_json,
     ])
 }
 
