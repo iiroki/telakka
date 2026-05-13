@@ -3,7 +3,7 @@ import ToastService from 'primevue/toastservice'
 import Tooltip from 'primevue/tooltip'
 import { createApp } from 'vue'
 import App from './App.vue'
-import Theme from './theme'
+import Theme, { DARK_MODE_CLASS } from './theme'
 
 // Styles:
 import 'primeicons/primeicons.css'
@@ -16,7 +16,7 @@ app.use(pinia)
 app.use(PrimeVue, {
   theme: {
     preset: Theme,
-    options: {},
+    options: { darkModeSelector: `.${DARK_MODE_CLASS}` },
   },
 })
 

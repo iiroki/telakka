@@ -5,10 +5,10 @@ which enables file-based persistence.
 
 ## Theme
 
-**Mode:** `system` | `dark` | `light`
+**Mode:** `system` | `light` | `dark`
 
-- `system` — follows OS preference via PrimeVue `darkModeSelector: 'system'`
-- `dark` / `light` — explicit override, toggled via `.dark-mode` class on `<html>`
+- `system` — follows OS preference.
+- `light` / `dark` — explicit override, toggled via `.theme-mode-dark` class on `<html>`
 
 **Accent color:** one of PrimeVue's supported colors (e.g. `indigo`, `blue`, `red`, etc.)
 
@@ -16,6 +16,6 @@ which enables file-based persistence.
 - Applied at runtime via PrimeVue `updatePrimaryPalette`
 - Default: `indigo`
 
-**Persistence:** settings stored via Pinia (`useSettingsStore`). Applied on load and on every save.
+**Persistence:** settings stored via Pinia — applied on initialization and on every save.
 
-**Schema:** validated with Zod (`zSettings` in `src/stores/settings.ts`).
+**Schema:** validated with Zod.
