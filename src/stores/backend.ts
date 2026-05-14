@@ -8,16 +8,16 @@ import {
   DockerProjectAction,
   DockerStatus,
 } from '../tauri/bindings.gen'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useNotificationStore } from './notification'
+import { useBackendMgmtStore } from './backend-mgmt'
 
 type UpdatedAt = {
   readonly updatedAt: Date
 }
 
-export const KEY = 'backend'
-
-export const useBackendStore = defineStore(KEY, () => {
+export const useBackendStore = defineStore('backend', () => {
+  const { state } = useBackendMgmtStore()
   const status = ref<(DockerStatus & UpdatedAt) | null>(null)
   const containers = ref<DockerContainer[]>([])
   const projects = ref<DockerComposeProject[]>([])
@@ -83,6 +83,7 @@ export const useBackendStore = defineStore(KEY, () => {
   }
 
   return {
+    state: computed(() => state),
     /** Docker status. */
     status,
     /** Docker containers — sorted by name. */

@@ -6,6 +6,8 @@ type SafeIntervalOptions = {
 
   /** Backoff time in ms to wait before retrying if the handler fails. */
   readonly backoffMs?: number | ((errorCount: number) => number)
+
+  readonly onError?: (error: unknown, errorCount: number) => void
 }
 
 export const createSafeInterval = (
@@ -24,9 +26,14 @@ export const createSafeInterval = (
     try {
       await handler()
       errorCount = 0
-    } catch {
+    } catch (err) {
       // Log uncaught errors?
       ++errorCount
+      try {
+        opt?.onError?.(err, errorCount)
+      } catch {
+        // NOP
+      }
     } finally {
       busy = false
 

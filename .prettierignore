@@ -3,5 +3,6 @@ src-tauri
 dist
 pnpm-lock.yaml
 **/*.d.ts
+**/*.gen.ts
 .claude
 .vscode

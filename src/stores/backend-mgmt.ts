@@ -3,19 +3,38 @@ import { ref } from 'vue'
 import { createSafeInterval } from '../utils/timers'
 import { log } from '../utils/log'
 import { mergeSorted } from '../utils/sort'
-import { KEY, useBackendStore } from './backend'
+import { useBackendStore } from './backend'
 import { defineStore } from 'pinia'
+
+type State = 'init' | 'ok' | 'error'
+
+type BackendState = {
+  readonly status: State
+  readonly containers: State
+  readonly stats: State
+}
 
 const POLL_MS = 1000 // Make this configurable?
 const BACKOFF_MS = 10000
 
-export const useBackendMgmtStore = defineStore(`${KEY}-mgmt`, () => {
+export const useBackendMgmtStore = defineStore('backend-mgmt', () => {
   const store = useBackendStore()
   const started = ref(false)
+  const state = ref<BackendState>({
+    status: 'init',
+    containers: 'init',
+    stats: 'init',
+  })
 
   let statusPollId: number | undefined
   let containerPollId: number | undefined
-  let statPollId: number | undefined
+  let statsPollId: number | undefined
+
+  const setStateIfChanged = (key: keyof BackendState, value: State) => {
+    if (state.value[key] !== value) {
+      state.value = { ...state.value, [key]: value }
+    }
+  }
 
   const startStatusPoller = () => {
     log.info('Starting status poller...')
@@ -25,12 +44,14 @@ export const useBackendMgmtStore = defineStore(`${KEY}-mgmt`, () => {
         const result = await commands.getStatus()
         if (result.status === 'ok') {
           store.status = { ...result.data, updatedAt: new Date() }
+          setStateIfChanged('status', 'ok')
         } else {
           log.warn(`Docker status error: ${result.error}`)
+          setStateIfChanged('status', 'error')
         }
       },
       POLL_MS,
-      { instant: true },
+      { instant: true, onError: () => setStateIfChanged('status', 'error') },
     )
   }
 
@@ -43,31 +64,34 @@ export const useBackendMgmtStore = defineStore(`${KEY}-mgmt`, () => {
         if (result.status === 'ok') {
           store.containers = mergeContainers(store.containers, result.data.containers)
           store.projects = mergeProjects(store.projects, result.data.projects)
+          setStateIfChanged('containers', 'ok')
         } else {
           log.warn(`Docker containers error: ${result.error}`)
+          setStateIfChanged('containers', 'error')
         }
       },
       POLL_MS,
-      { instant: true },
+      { instant: true, onError: () => setStateIfChanged('containers', 'error') },
     )
   }
 
-  // Dockers stats will block until the next batch is ready — we can safely keep spamming the command
-  const startStatLoop = () => {
-    log.info('Starting stat loop...')
-    clearInterval(statPollId)
-    statPollId = createSafeInterval(
+  // Docker stats will block until the next batch is ready — we can safely keep spamming the command
+  const startStatsPoller = () => {
+    log.info('Starting stats poller...')
+    clearInterval(statsPollId)
+    statsPollId = createSafeInterval(
       async () => {
         const result = await commands.getContainerStats()
         if (result.status === 'ok') {
           store.stats = result.data
+          setStateIfChanged('stats', 'ok')
         } else {
           log.warn(`Docker stats error: ${result.error}`)
           throw new Error(result.error)
         }
       },
       0,
-      { instant: true, backoffMs: BACKOFF_MS },
+      { instant: true, backoffMs: BACKOFF_MS, onError: () => setStateIfChanged('stats', 'error') },
     )
   }
 
@@ -79,7 +103,7 @@ export const useBackendMgmtStore = defineStore(`${KEY}-mgmt`, () => {
     log.info('Starting backend services...')
     started.value = true
     startStatusPoller()
-    startStatLoop()
+    startStatsPoller()
     startContainerPoller()
     log.info('Backend services started')
   }
@@ -89,11 +113,16 @@ export const useBackendMgmtStore = defineStore(`${KEY}-mgmt`, () => {
     started.value = false
     clearInterval(statusPollId)
     clearInterval(containerPollId)
-    clearInterval(statPollId)
+    clearInterval(statsPollId)
     log.info('Backend services stopped')
   }
 
-  return { started, start, stop }
+  return {
+    state,
+    started,
+    start,
+    stop,
+  }
 })
 
 /**
