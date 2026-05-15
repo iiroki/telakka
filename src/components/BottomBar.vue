@@ -7,25 +7,32 @@ import KeyValueTable from './common/KeyValueTable.vue'
 import { useBackendStore } from '../stores/backend'
 import { useTabStore } from '../stores/tab'
 
-const DEFAULT_CONTEXT = 'default'
+const DEFAULT_DOCKER_CONTEXT = 'default'
 
 const statusDialogOpen = ref(false)
 
 const { openOrCreateTab } = useTabStore()
-const { status, stats } = storeToRefs(useBackendStore())
+const { state, status, stats } = storeToRefs(useBackendStore())
+const statusLoading = computed(() => state.value.status === 'init')
+const statsLoading = computed(() => state.value.stats === 'init')
 
 const statusColor = computed(() => {
+  if (statusLoading.value) return 'var(--p-stone-500)'
   if (!status.value) return 'var(--p-red-500)'
   if (!status.value.server) return 'var(--p-yellow-500)'
   return 'var(--p-green-500)'
 })
 
-const label = computed(() => {
+const statusLabel = computed(() => {
+  if (statusLoading.value) {
+    return '...'
+  }
+
   const parts: (string | null)[] = ['Docker']
   if (status.value) {
     parts.push(
       status.value.server?.version ?? '???',
-      status.value.client.context !== DEFAULT_CONTEXT ? `(${status.value.client.context})` : null,
+      status.value.client.context !== DEFAULT_DOCKER_CONTEXT ? `(${status.value.client.context})` : null,
     )
   } else {
     parts.push('unavailable')
@@ -35,7 +42,7 @@ const label = computed(() => {
 })
 
 const resourceUsage = computed(() => {
-  if (!stats.value) {
+  if (statsLoading.value) {
     return null
   }
 
@@ -54,21 +61,23 @@ const resourceUsage = computed(() => {
   <div class="bottom-bar">
     <Button class="status-btn" text severity="secondary" size="small" @click="statusDialogOpen = true">
       <span class="dot" :style="{ background: statusColor }" />
-      <span>{{ label }}</span>
+      <span>{{ statusLabel }}</span>
     </Button>
 
     <div>
       <Button text size="small" severity="secondary" @click="openOrCreateTab({ key: '_resource-monitor' })">
         <span>
           CPU:
-          <span style="display: inline-block; width: 6ch; text-align: right">{{
-            resourceUsage?.cpuPerc.toFixed(2) ?? '-'
-          }}</span>
+          <span style="display: inline-block; width: 6ch; text-align: right">
+            {{ resourceUsage?.cpuPerc.toFixed(2) ?? '-' }}
+          </span>
           %
         </span>
         <span>
           Mem:
-          <span style="display: inline-block; width: 5ch">{{ resourceUsage?.memPerc.toFixed(2) ?? '-' }}</span>
+          <span style="display: inline-block; width: 5ch; text-align: right">
+            {{ resourceUsage?.memPerc.toFixed(2) ?? '-' }}
+          </span>
           %
         </span>
       </Button>

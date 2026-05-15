@@ -17,7 +17,6 @@ type UpdatedAt = {
 }
 
 export const useBackendStore = defineStore('backend', () => {
-  const { state } = useBackendMgmtStore()
   const status = ref<(DockerStatus & UpdatedAt) | null>(null)
   const containers = ref<DockerContainer[]>([])
   const projects = ref<DockerComposeProject[]>([])
@@ -83,7 +82,8 @@ export const useBackendStore = defineStore('backend', () => {
   }
 
   return {
-    state: computed(() => state),
+    // Even though there's a circular dependency, this works since Pinia lazily resolves the stores.
+    state: computed(() => useBackendMgmtStore().state),
     /** Docker status. */
     status,
     /** Docker containers — sorted by name. */
