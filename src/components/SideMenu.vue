@@ -1,20 +1,38 @@
 <script setup lang="ts">
 import { Button } from 'primevue'
+import { TabRouteRootSegment, TabRouteSegment, useTabStore } from '../stores/tabs'
+import { computed } from 'vue'
+import { storeToRefs } from 'pinia'
 
 type SideMenuItem = {
-  readonly key: string
+  readonly key: TabRouteRootSegment
   readonly icon: string
   readonly tooltip?: string
   readonly active?: boolean
+  readonly disabled?: boolean
 }
 
-const items: readonly SideMenuItem[] = [
-  { key: 'containers', icon: 'pi pi-box', tooltip: 'Containers', active: true },
+const ITEMS: readonly SideMenuItem[] = [
+  { key: 'containers', icon: 'pi pi-box', tooltip: 'Containers' },
   { key: 'images', icon: 'pi pi-folder', tooltip: 'Images' },
-  { key: 'volumes', icon: 'pi pi-database', tooltip: 'Volumes' },
-  { key: 'networks', icon: 'pi pi-globe', tooltip: 'Networks' },
-  // { key: 'settings', icon: 'pi pi-cog', label: 'Settings' },
+  { key: 'volumes', icon: 'pi pi-database', tooltip: 'Volumes', disabled: true },
+  { key: 'networks', icon: 'pi pi-globe', tooltip: 'Networks', disabled: true },
 ]
+
+const store = useTabStore()
+const { currentTab } = storeToRefs(store)
+const { setCurrentTab } = store
+
+const handleNavigation = (key: TabRouteSegment) => {
+  setCurrentTab({ route: [key] })
+}
+
+const items = computed<readonly SideMenuItem[]>(() =>
+  ITEMS.map((item) => ({
+    ...item,
+    active: currentTab?.value?.route[0] === item.key,
+  })),
+)
 </script>
 
 <template>
@@ -28,6 +46,8 @@ const items: readonly SideMenuItem[] = [
       text
       severity="secondary"
       :aria-label="item.tooltip"
+      :disabled="item.disabled"
+      @click="() => handleNavigation(item.key)"
     />
   </nav>
 </template>

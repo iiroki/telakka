@@ -1,18 +1,15 @@
 <script setup lang="ts">
-import { Breadcrumb, Button, Tab, TabList, TabPanel, TabPanels, Tabs } from 'primevue'
-import { computed, ref } from 'vue'
-import { RouteMenuItem } from '../types'
+import { Button, Tab, TabList, TabPanel, TabPanels, Tabs } from 'primevue'
+import { computed } from 'vue'
 import SideMenu from '../SideMenu.vue'
-import { useTabStore } from '../../stores/tab'
+import { useTabStore } from '../../stores/tabs'
 import { storeToRefs } from 'pinia'
-import TabBody from './TabBody.vue'
+import TabContentRouter from './TabContentRouter.vue'
+import TabBreadcrumb from './TabBreadcrumb.vue'
+import TabHeader from './TabHeader.vue'
 
 const store = useTabStore()
-if (store.tabs.length === 0) {
-  store.createTab({ route: { key: 'containers' } }, true)
-}
-
-const { tabs, selected } = storeToRefs(store)
+const { tabs, selected, currentTab } = storeToRefs(store)
 const active = computed<string>({
   get: () => {
     if (!selected.value) {
@@ -23,48 +20,38 @@ const active = computed<string>({
   },
   set: (v) => store.setSelected(v),
 })
-
-// TODO: Fetch the breadcrumb items from state
-
-const nop = ref<RouteMenuItem>({
-  route: '_unknown',
-})
-
-const testBreadcrumb = ref<RouteMenuItem>({
-  label: 'Containers',
-  route: 'containers',
-})
 </script>
 
-<!-- Figure out how to make thes plus sign "sticky"? -->
+<!-- Figure out how to make this plus sign "sticky"? -->
 <template>
   <Tabs v-model:value="active" scrollable style="height: 100%">
     <TabList>
       <Tab v-for="tab in tabs" :key="tab.id" :value="tab.id">
-        <span style="font-weight: bold"> {{ tab.route.key }}</span>
+        <TabHeader :segment="tab.route[tab.route.length - 1]" />
+        <Button class="tab-close" icon="pi pi-times" text rounded size="small" @click.stop="store.closeTab(tab.id)" />
       </Tab>
       <Button
         icon="pi pi-plus"
         text
         size="small"
         style="align-self: center; height: fit-content"
-        @click="store.createTab({ route: { key: 'containers' } }, true)"
+        @click="store.createTab({ route: ['containers'] }, true)"
       />
     </TabList>
     <TabPanels>
       <TabPanel v-for="tab in tabs" :key="tab.id" :value="tab.id">
-        <div class="tab-container-layout">
+        <div class="tab-body">
           <template v-if="store.isWorkspaceTab(tab)">
             <SideMenu />
-            <div class="tab-container">
-              <div class="tab-container-header">
-                <Breadcrumb :home="nop" :model="[testBreadcrumb]" />
+            <div class="tab-body-with-menu">
+              <div class="tab-breadcrumb">
+                <TabBreadcrumb :route="currentTab?.route" />
               </div>
-              <TabBody class="tab-container-body" :tab="tab" />
+              <TabContentRouter class="tab-content" :tab="tab" />
             </div>
           </template>
           <template v-else>
-            <TabBody class="tab-container-body" :tab="tab" style="padding: 0.25rem 1rem" />
+            <TabContentRouter class="tab-content" :tab="tab" style="padding: 0.25rem 1rem" />
           </template>
         </div>
       </TabPanel>
@@ -76,6 +63,14 @@ const testBreadcrumb = ref<RouteMenuItem>({
 :deep(.p-tablist) {
   background: var(--nav-background);
 }
+
+/* :deep(.p-tablist-active-bar) {
+  display: none !important;
+}
+
+:deep(.p-tab[data-p-active='true']) {
+  border-bottom: 1px solid var(--p-primary-color);
+} */
 
 :deep(.p-tabpanels) {
   padding: 0;
@@ -92,25 +87,25 @@ const testBreadcrumb = ref<RouteMenuItem>({
   flex-direction: column;
 }
 
-.tab-container-header {
+.tab-breadcrumb {
   border-bottom: 1px solid var(--p-content-border-color);
   background: var(--nav-background);
 }
 
-.tab-container-header :deep(.p-breadcrumb) {
+.tab-breadcrumb :deep(.p-breadcrumb) {
   background: transparent;
   padding: 0.75rem 0.5rem;
   border: none;
 }
 
-.tab-container-layout {
+.tab-body {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: row;
 }
 
-.tab-container {
+.tab-body-with-menu {
   flex: 1;
   min-width: 0;
   min-height: 0;
@@ -118,9 +113,25 @@ const testBreadcrumb = ref<RouteMenuItem>({
   flex-direction: column;
 }
 
-.tab-container-body {
+.tab-content {
   flex: 1;
   min-height: 0;
   overflow: auto;
+}
+
+:deep(.p-tab) {
+  position: relative;
+}
+
+:deep(.tab-close) {
+  visibility: hidden;
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+:deep(.p-tab:hover .tab-close) {
+  visibility: visible;
 }
 </style>

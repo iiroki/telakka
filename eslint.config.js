@@ -23,6 +23,7 @@ export default typescriptEslint.config(
     },
     rules: {
       // See ".prettierrc.json" first
+      'no-case-declarations': 'off',
       '@typescript-eslint/no-unused-vars': 'warn',
       'vue/multi-word-component-names': 'off',
     },

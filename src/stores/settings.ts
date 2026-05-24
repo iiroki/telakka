@@ -27,7 +27,7 @@ export const useSettingsStore = defineStore('settings', () => {
         settings.value = s
       }
     } catch (err) {
-      notify({ level: 'warn', title: 'Failed to load settings' })
+      notify({ level: 'warn', title: 'Failed to load settings', err })
     }
   }
 
@@ -38,7 +38,7 @@ export const useSettingsStore = defineStore('settings', () => {
     try {
       await storage.write(SETTINGS_KEY, settings.value)
     } catch (err) {
-      notify({ level: 'warn', title: 'Failed to persist settings' })
+      notify({ level: 'warn', title: 'Failed to persist settings', err })
     }
   }
 

@@ -14,6 +14,9 @@ import { useBackendStore } from '../../stores/backend'
 import ContainerStateIcon from './ContainerStateIcon.vue'
 import { useNotificationStore } from '../../stores/notification'
 import ContainerActionButton from './ContainerActionButton.vue'
+import { useTabStore } from '../../stores/tabs'
+import { log } from '../../utils/log'
+import { createStyle } from '../../utils/style'
 
 type KnownKeys<T> = {
   [K in keyof T as string extends K ? never : number extends K ? never : K]: T[K]
@@ -30,10 +33,11 @@ type ContainerData = Pick<DockerContainer, 'id' | 'name' | 'state' | 'image' | '
 
 type ContainerListNodeData = ContainerData | ProjectData
 type ContainerListNode = TypedTreeNode<ContainerListNodeData>
-type ContainerListNodeTooltipType = 'state'
+type ContainerListNodeTooltipType = 'state' | 'name'
 
 const PROJECT_PREFIX = '__project__'
 
+const { setCurrentTab } = useTabStore()
 const backend = useBackendStore()
 const { containers, projects } = storeToRefs(backend)
 const { runContainerAction, runProjectAction, findContainer, findProject } = backend
@@ -74,7 +78,7 @@ const buildHoverTooltip = (
 ): string | null => {
   if (type === 'state') {
     if (isContainerData(data)) {
-      const live = findContainer(data.id)
+      const live = findContainer(data.id).value
       if (!live) {
         return null
       }
@@ -82,8 +86,17 @@ const buildHoverTooltip = (
       return [live.state, live.status, live.statusDetail].filter(Boolean).join('\n')
     }
     if (isProjectData(data)) {
-      const live = findProject(data.project)
+      const live = findProject(data.project).value
       return live?.state ?? null
+    }
+  } else if (type === 'name') {
+    if (isContainerData(data)) {
+      const live = findContainer(data.id).value
+      if (!live) {
+        return null
+      }
+
+      return live.name
     }
   }
 
@@ -105,6 +118,21 @@ const handleAction = async (action: DockerContainerAction | DockerProjectAction,
     await runContainerAction(action as DockerContainerAction, data.id)
   } else if (isProjectData(data)) {
     await runProjectAction(action as DockerProjectAction, data.project)
+  }
+}
+
+const handleSelect = (node: TreeNode) => {
+  log.debug(`Node selected — Key: ${node.key}`)
+  if (isContainerListNode(node)) {
+    if (isContainerData(node.data)) {
+      const { id } = node.data
+      log.debug(`Container selected — ID: ${id}`)
+      setCurrentTab({ route: ['containers', `container=${id}`] })
+    } else if (isProjectData(node.data)) {
+      const { project } = node.data
+      log.debug(`Project selected: ${project}`)
+      setCurrentTab({ route: ['containers', `project=${project}`] })
+    }
   }
 }
 
@@ -227,7 +255,7 @@ const hierarchy = computed<ContainerListNode[]>(() => {
 </script>
 
 <template>
-  <TreeTable :value="hierarchy" :indentation="0">
+  <TreeTable :value="hierarchy" :indentation="0" selection-mode="single" @node-select="handleSelect">
     <Column :expander="true" :style="{ width: '1%' }" />
     <Column header="State" :style="{ width: '1%' }" :header-style="{ textAlign: 'center' }">
       <template #body="{ node }">
@@ -246,11 +274,18 @@ const hierarchy = computed<ContainerListNode[]>(() => {
         </template>
       </template>
     </Column>
-    <Column
-      header="Name"
-      :field="(data: ContainerListNodeData) => getDisplayName(data)"
-      :body-style="{ fontFamily: 'monospace' }"
-    />
+    <Column header="Name" :body-style="{ fontFamily: 'monospace' }">
+      <template #body="{ node }">
+        <template v-if="isContainerListNode(node)">
+          <span
+            v-tooltip.top="{ value: hoverTooltip, pt: { text: { style: createStyle({ fontFamily: 'monospace' }) } } }"
+            @pointerenter="onHoverTooltip(node, 'name')"
+          >
+            {{ getDisplayName(node.data) }}
+          </span>
+        </template>
+      </template>
+    </Column>
     <Column
       header="Image"
       :field="(data: ContainerListNodeData) => (isContainerData(data) ? data.image : '')"

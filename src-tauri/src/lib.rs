@@ -72,7 +72,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()
-                .level(tauri_plugin_log::log::LevelFilter::Info)
+                .level(tauri_plugin_log::log::LevelFilter::Info) // Configurable log level?
                 .build(),
         )
         .plugin(tauri_plugin_opener::init())

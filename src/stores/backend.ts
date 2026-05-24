@@ -8,7 +8,7 @@ import {
   DockerProjectAction,
   DockerStatus,
 } from '../tauri/bindings.gen'
-import { computed, ref } from 'vue'
+import { computed, ComputedRef, ref } from 'vue'
 import { useNotificationStore } from './notification'
 import { useBackendMgmtStore } from './backend-mgmt'
 
@@ -23,9 +23,11 @@ export const useBackendStore = defineStore('backend', () => {
   const stats = ref<DockerContainerStats[]>([])
   const { notify } = useNotificationStore()
 
-  const findContainer = (id: string): DockerContainer | null => containers.value.find((c) => c.id === id) ?? null
-  const findProject = (name: string): DockerComposeProject | null =>
-    projects.value.find((p) => p.project === name) ?? null
+  const findContainer = (id: string): ComputedRef<DockerContainer | null> =>
+    computed(() => containers.value.find((c) => c.id === id) ?? null)
+
+  const findProject = (name: string): ComputedRef<DockerComposeProject | null> =>
+    computed(() => projects.value.find((p) => p.project === name) ?? null)
 
   const runContainerAction = async (action: DockerContainerAction, id: string): Promise<boolean> => {
     try {

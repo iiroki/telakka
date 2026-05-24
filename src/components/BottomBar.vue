@@ -5,7 +5,7 @@ import Dialog from 'primevue/dialog'
 import { computed, ref } from 'vue'
 import KeyValueTable from './common/KeyValueTable.vue'
 import { useBackendStore } from '../stores/backend'
-import { useTabStore } from '../stores/tab'
+import { useTabStore } from '../stores/tabs'
 
 const DEFAULT_DOCKER_CONTEXT = 'default'
 
@@ -65,7 +65,7 @@ const resourceUsage = computed(() => {
     </Button>
 
     <div>
-      <Button text size="small" severity="secondary" @click="openOrCreateTab({ key: '_resource-monitor' })">
+      <Button text size="small" severity="secondary" @click="openOrCreateTab('_resource-monitor')">
         <span>
           CPU:
           <span style="display: inline-block; width: 6ch; text-align: right">
@@ -95,7 +95,7 @@ const resourceUsage = computed(() => {
         severity="secondary"
         size="small"
         aria-label="Settings"
-        @click="openOrCreateTab({ key: '_settings' })"
+        @click="openOrCreateTab('_settings')"
       />
     </div>
   </div>
@@ -157,7 +157,8 @@ const resourceUsage = computed(() => {
   justify-content: space-between;
   padding: 0.25rem 0.75rem;
   border-top: 1px solid var(--p-content-border-color);
-  background: var(--p-content-background);
+  /* background: var(--p-content-background); */
+  background: var(--nav-background);
   font-size: 0.85rem;
 }
 

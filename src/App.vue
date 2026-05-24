@@ -3,8 +3,8 @@ import { Toast } from 'primevue'
 import BottomBar from './components/BottomBar.vue'
 import { useBackendMgmtStore } from './stores/backend-mgmt'
 import { onBeforeMount, onMounted, onUnmounted } from 'vue'
-import TabContainer from './components/tabs/TabContainer.vue'
 import { useSettingsStore } from './stores/settings'
+import TabLayout from './components/tabs/TabLayout.vue'
 
 const { applySettings } = useSettingsStore()
 const backendMgmt = useBackendMgmtStore()
@@ -25,7 +25,7 @@ onUnmounted(() => {
 <template>
   <div class="app">
     <main>
-      <TabContainer />
+      <TabLayout />
     </main>
     <BottomBar />
   </div>
@@ -73,6 +73,10 @@ h5,
 h6 {
   font-weight: 500;
   letter-spacing: -0.01em;
+}
+
+.mono {
+  font-family: monospace !important;
 }
 
 .p-dialog-title {
