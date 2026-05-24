@@ -28,15 +28,19 @@ const active = computed<string>({
     <TabList>
       <Tab v-for="tab in tabs" :key="tab.id" :value="tab.id">
         <TabHeader :segment="tab.route[tab.route.length - 1]" />
-        <Button class="tab-close" icon="pi pi-times" text rounded size="small" @click.stop="store.closeTab(tab.id)" />
+        <Button
+          class="tab-close"
+          icon="pi pi-times"
+          text
+          rounded
+          size="small"
+          severity="secondary"
+          @click.stop="store.closeTab(tab.id)"
+        />
       </Tab>
-      <Button
-        icon="pi pi-plus"
-        text
-        size="small"
-        style="align-self: center; height: fit-content"
-        @click="store.createTab({ route: ['containers'] }, true)"
-      />
+      <span style="align-self: center; height: fit-content; padding-right: 0.5rem">
+        <Button icon="pi pi-plus" text size="small" @click="store.createTab({ route: ['containers'] }, true)" />
+      </span>
     </TabList>
     <TabPanels>
       <TabPanel v-for="tab in tabs" :key="tab.id" :value="tab.id">
@@ -64,13 +68,10 @@ const active = computed<string>({
   background: var(--nav-background);
 }
 
-/* :deep(.p-tablist-active-bar) {
+:deep(.p-tablist-active-bar) {
   display: none !important;
+  transition: none !important;
 }
-
-:deep(.p-tab[data-p-active='true']) {
-  border-bottom: 1px solid var(--p-primary-color);
-} */
 
 :deep(.p-tabpanels) {
   padding: 0;

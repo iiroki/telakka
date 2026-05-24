@@ -69,6 +69,16 @@ export const updateThemeMode = (mode: ThemeMode) => {
  * Telakka theme, based on PrimeVue Aura with few adjustments.
  */
 const Theme = definePreset(Aura, {
+  components: {
+    tabs: {
+      root: {
+        // The active bar animation seems to be broken on the controlled mode,
+        // which causes "ghost active bar animations" to be left behind when switching tabs.
+        // This is a workaround to disable the whole animation.
+        transitionDuration: '0s',
+      },
+    },
+  },
   css: () => `
     :root {
       --nav-background: color-mix(in srgb, var(--p-content-background) 95%, var(--p-gray-400));
