@@ -29,11 +29,12 @@ type TypedTreeNode<T> = Omit<KnownKeys<TreeNode>, 'data'> & {
 /** Container data with only the structural fields. */
 type ContainerData = Pick<DockerContainer, 'id' | 'name' | 'state' | 'image' | 'ports' | 'receiptDurable'> & {
   readonly displayName?: string
+  readonly platform: string
 }
 
 type ContainerListNodeData = ContainerData | ProjectData
 type ContainerListNode = TypedTreeNode<ContainerListNodeData>
-type ContainerListNodeTooltipType = 'state' | 'name'
+type ContainerListNodeTooltipType = 'state' | 'name' | 'ports'
 
 const PROJECT_PREFIX = '__project__'
 
@@ -45,6 +46,7 @@ const { notify } = useNotificationStore()
 
 const isContainerListNode = (node: TreeNode): node is ContainerListNode => 'state' in node.data
 const isContainerData = (data: ContainerListNodeData): data is ContainerData => 'id' in data
+const isContainerNode = (node: TreeNode): node is TypedTreeNode<ContainerData> => isContainerData(node.data)
 const isProjectData = (data: ContainerListNodeData): data is ProjectData => 'project' in data
 const isProjectNode = (node: TreeNode): node is TypedTreeNode<ProjectData> => isProjectData(node.data)
 
@@ -62,6 +64,7 @@ const toContainerData = (c: DockerContainer, useProjectService = true): Containe
   state: c.state,
   image: c.image,
   ports: c.ports,
+  platform: `${c.platform.os}/${c.platform.architecture}`,
   receiptDurable: c.receiptDurable,
   displayName: useProjectService ? (c.compose?.service ?? c.name) : c.name,
 })
@@ -97,6 +100,13 @@ const buildHoverTooltip = (
       }
 
       return live.name
+    }
+  } else if (type === 'ports') {
+    if (isContainerData(data)) {
+      return data.ports
+        .filter((p) => !!p.hostPort)
+        .map((p) => `${p.hostPort}:${p.containerPort} (${p.protocol})`)
+        .join('\n')
     }
   }
 
@@ -255,8 +265,8 @@ const hierarchy = computed<ContainerListNode[]>(() => {
 </script>
 
 <template>
-  <TreeTable :value="hierarchy" :indentation="0" selection-mode="single" @node-select="handleSelect">
-    <Column :expander="true" :style="{ width: '1%' }" />
+  <TreeTable :value="hierarchy" :indentation="0" selection-mode="single" resizable-columns @node-select="handleSelect">
+    <Column :expander="true" align-frozen="left" :style="{ width: '1%' }" />
     <Column header="State" :style="{ width: '1%' }" :header-style="{ textAlign: 'center' }">
       <template #body="{ node }">
         <template v-if="isContainerListNode(node)">
@@ -291,6 +301,25 @@ const hierarchy = computed<ContainerListNode[]>(() => {
       :field="(data: ContainerListNodeData) => (isContainerData(data) ? data.image : '')"
       :body-style="{ fontFamily: 'monospace' }"
     />
+    <Column
+      header="Platform"
+      :field="(data: ContainerListNodeData) => (isContainerData(data) ? data.platform : '')"
+      :body-style="{ fontFamily: 'monospace' }"
+    />
+    <Column header="Ports">
+      <template #body="{ node }">
+        <template v-if="isContainerNode(node)">
+          <span v-tooltip.top="{ value: hoverTooltip }" @pointerenter="onHoverTooltip(node, 'ports')">
+            {{
+              node.data.ports
+                .filter((p) => !!p.hostPort)
+                .map((p) => `${p.hostPort}:${p.containerPort}`)
+                .join('\n')
+            }}
+          </span>
+        </template>
+      </template>
+    </Column>
     <Column header="Actions">
       <template #body="{ node }">
         <template v-if="isContainerListNode(node)">
@@ -304,5 +333,19 @@ const hierarchy = computed<ContainerListNode[]>(() => {
 <style scoped>
 :deep(.p-treetable-tbody > tr) {
   cursor: pointer;
+}
+
+:deep(.p-treetable-column-resizer) {
+  border-right: 1px solid var(--p-content-border-color);
+  opacity: 0.3;
+  transition: opacity 0.15s;
+  top: 20%;
+  bottom: 20%;
+  height: auto;
+}
+
+:deep(.p-treetable-column-resizer:hover),
+:deep(.p-treetable-column-resizer-helper) {
+  opacity: 1;
 }
 </style>

@@ -102,6 +102,7 @@ export type DockerContainerStats = {
 
 export type DockerNetworkBinding = {
 	hostPort: number | null,
+	hostAddresses: string[],
 	containerPort: number,
 	protocol: string,
 };

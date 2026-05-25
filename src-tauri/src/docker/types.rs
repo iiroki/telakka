@@ -96,6 +96,7 @@ pub struct DockerContainer {
 #[serde(rename_all = "camelCase")]
 pub struct DockerNetworkBinding {
     pub host_port: Option<u16>,
+    pub host_addresses: Vec<String>,
     pub container_port: u16,
     pub protocol: String,
 }

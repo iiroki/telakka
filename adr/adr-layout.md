@@ -26,16 +26,19 @@
 
 ## Tab routes
 
+Routes are ordered sequences of segments.
+Detail segments identify a specific resource within a view (e.g. a container by ID).
+
 > Types:
 >
 > - **W** = workspace
 > - **S** = special
 
-| Route                        | Type | Description                                                   |
-| ---------------------------- | ---- | ------------------------------------------------------------- |
-| `containers`                 | W    | Container list with navigation and quick actions              |
-| `containers/:id` (TODO)      | W    | Detailed container view with detailed information and actions |
-| `containers/:id/logs` (TODO) | W    | Container log stream                                          |
-| `_settings`                  | S    | Settings management                                           |
-| `_notifications` (TODO)      | S    | Notification history                                          |
-| `_resource-monitor` (TODO)   | S    | Resource monitor graphs                                       |
+| Route                                           | Type | Description                                                   |
+| ----------------------------------------------- | ---- | ------------------------------------------------------------- |
+| `containers`                                    | W    | Container list with navigation and quick actions              |
+| `containers` › `container:<id>` (TODO)          | W    | Detailed container view with detailed information and actions |
+| `containers` › `container:<id>` › `logs` (TODO) | W    | Container log stream                                          |
+| `_settings`                                     | S    | Settings management                                           |
+| `_notifications` (TODO)                         | S    | Notification history                                          |
+| `_resource-monitor` (TODO)                      | S    | Resource monitor graphs                                       |

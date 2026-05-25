@@ -192,7 +192,6 @@ pub fn run_project_action(action: &DockerProjectAction, project: &str) -> Result
 
     let _project_file = extract_project_config_file(&project_container)
         .ok_or_else(|| format!("Project config file not found: {}", project))?;
-    // TODO — Navigate to the project dir and run commands
 
     cli.run()?;
     Ok(())
@@ -321,28 +320,47 @@ fn split_status(s: &str) -> (String, Option<String>) {
 
 /// Parses `Ports` string — e.g. `0.0.0.0:15672->15672/tcp, 4369/tcp`.
 fn parse_ports(s: &str, only_bound: bool) -> Vec<DockerNetworkBinding> {
-    s.split(',')
-        .map(str::trim)
-        .filter(|p| !p.is_empty())
-        .filter_map(|entry| {
-            let (host_port, container_side) = match entry.split_once("->") {
-                Some((host_side, rest)) => {
-                    let port = host_side.rsplit(':').next()?.parse().ok();
-                    (port, rest)
-                }
-                None if only_bound => return None,
-                None => (None, entry),
-            };
+    type Key = (Option<u16>, u16, String);
+    let mut network_bindings: std::collections::HashMap<Key, DockerNetworkBinding> =
+        std::collections::HashMap::new();
 
-            let (container_port_str, protocol) = container_side.split_once('/')?;
-            let container_port: u16 = container_port_str.parse().ok()?;
-            Some(DockerNetworkBinding {
+    for entry in s.split(',').map(str::trim).filter(|p| !p.is_empty()) {
+        let (host_port, host_address, container_side) = match entry.split_once("->") {
+            Some((host_side, rest)) => {
+                let port = host_side.rsplit(':').next().and_then(|p| p.parse().ok());
+                let address = host_side.rsplit_once(':').map(|(addr, _)| addr.to_string());
+                (port, address, rest)
+            }
+            None if only_bound => continue,
+            None => (None, None, entry),
+        };
+
+        let Some((container_port_str, protocol)) = container_side.split_once('/') else {
+            continue;
+        };
+        let Ok(container_port) = container_port_str.parse::<u16>() else {
+            continue;
+        };
+
+        let network_binding = network_bindings
+            .entry((host_port, container_port, protocol.to_string()))
+            .or_insert(DockerNetworkBinding {
                 host_port,
+                host_addresses: vec![],
                 container_port,
                 protocol: protocol.to_string(),
-            })
-        })
-        .collect()
+            });
+
+        if let Some(addr) = host_address {
+            if !network_binding.host_addresses.contains(&addr) {
+                network_binding.host_addresses.push(addr);
+            }
+        }
+    }
+
+    let mut result = network_bindings.into_values().collect::<Vec<_>>();
+    result.sort_by_key(|b| b.container_port);
+    result
 }
 
 fn parse_current_available(s: &str) -> (Option<String>, Option<String>) {
