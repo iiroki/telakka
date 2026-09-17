@@ -21,3 +21,10 @@ See the ["Settings"](./adr-state.md#settings) ADR for documentation on how setti
 ## Backend
 
 TODO — will be implemented later.
+
+## Containers
+
+**Group by project:** Whether to group project containers into a collapsible project rows.
+
+- Yes — project `example-project` + container: `db`
+- No — container: `example-project-db` (project as a prefix)

@@ -1,7 +1,7 @@
 import { commands, DockerComposeProject, DockerContainer } from '../tauri/bindings.gen'
 import { ref } from 'vue'
 import { createSafeInterval } from '../utils/timers'
-import { log } from '../utils/log'
+import { log, LogLevel } from '../utils/log'
 import { mergeSorted } from '../utils/sort'
 import { useBackendStore } from './backend'
 import { defineStore } from 'pinia'
@@ -36,6 +36,12 @@ export const useBackendMgmtStore = defineStore('backend-mgmt', () => {
     }
   }
 
+  const logIfChanged = (key: keyof BackendState, value: State, level: LogLevel, message: string) => {
+    if (state.value[key] !== value) {
+      log.write(level, message)
+    }
+  }
+
   const startStatusPoller = () => {
     log.info('Starting status poller...')
     clearInterval(statusPollId)
@@ -46,7 +52,7 @@ export const useBackendMgmtStore = defineStore('backend-mgmt', () => {
           store.status = { ...result.data, updatedAt: new Date() }
           setStateIfChanged('status', 'ok')
         } else {
-          log.warn(`Docker status error: ${result.error}`)
+          logIfChanged('status', 'error', 'warn', `Docker status error: ${result.error}`)
           setStateIfChanged('status', 'error')
         }
       },
@@ -66,7 +72,7 @@ export const useBackendMgmtStore = defineStore('backend-mgmt', () => {
           store.projects = mergeProjects(store.projects, result.data.projects)
           setStateIfChanged('containers', 'ok')
         } else {
-          log.warn(`Docker containers error: ${result.error}`)
+          logIfChanged('containers', 'error', 'warn', `Docker containers error: ${result.error}`)
           setStateIfChanged('containers', 'error')
         }
       },
@@ -86,7 +92,7 @@ export const useBackendMgmtStore = defineStore('backend-mgmt', () => {
           store.stats = result.data
           setStateIfChanged('stats', 'ok')
         } else {
-          log.warn(`Docker stats error: ${result.error}`)
+          logIfChanged('stats', 'error', 'warn', `Docker stats error: ${result.error}`)
           throw new Error(result.error)
         }
       },

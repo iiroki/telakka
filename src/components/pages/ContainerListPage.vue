@@ -1,3 +1,7 @@
 <script setup lang="ts">
-// TODO
+import ContainerList from '../containers/ContainerList.vue'
 </script>
+
+<template>
+  <ContainerList />
+</template>

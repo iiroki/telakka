@@ -62,6 +62,12 @@ export const useTabStore = defineStore('tab', () => {
     }
   }
 
+  const pushToCurrentTab = (segment: TabRouteSegment) => {
+    if (currentTab.value) {
+      setCurrentTab({ route: [...currentTab.value.route, segment] })
+    }
+  }
+
   const createTab = (state: Omit<TabState, 'id'>, select = false) => {
     const id = genId()
     tabs.value.push({ ...state, id })
@@ -119,6 +125,7 @@ export const useTabStore = defineStore('tab', () => {
     currentTab,
     setSelected,
     setCurrentTab,
+    pushToCurrentTab,
     getTab,
     setTab,
     createTab,

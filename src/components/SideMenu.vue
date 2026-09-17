@@ -14,7 +14,7 @@ type SideMenuItem = {
 
 const ITEMS: readonly SideMenuItem[] = [
   { key: 'containers', icon: 'pi pi-box', tooltip: 'Containers' },
-  { key: 'images', icon: 'pi pi-folder', tooltip: 'Images' },
+  { key: 'images', icon: 'pi pi-folder', tooltip: 'Images', disabled: true },
   { key: 'volumes', icon: 'pi pi-database', tooltip: 'Volumes', disabled: true },
   { key: 'networks', icon: 'pi pi-globe', tooltip: 'Networks', disabled: true },
 ]

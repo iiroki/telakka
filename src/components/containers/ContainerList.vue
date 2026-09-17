@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Column, TreeTable } from 'primevue'
-import { computed, ref } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import {
   DockerComposeProject as ProjectData,
@@ -18,6 +18,7 @@ import { useTabStore } from '../../stores/tabs'
 import { log } from '../../utils/log'
 import { createStyle } from '../../utils/style'
 
+// Move to some utility types
 type KnownKeys<T> = {
   [K in keyof T as string extends K ? never : number extends K ? never : K]: T[K]
 }
@@ -38,7 +39,7 @@ type ContainerListNodeTooltipType = 'state' | 'name' | 'ports'
 
 const PROJECT_PREFIX = '__project__'
 
-const { setCurrentTab } = useTabStore()
+const { setCurrentTab, pushToCurrentTab } = useTabStore()
 const backend = useBackendStore()
 const { containers, projects } = storeToRefs(backend)
 const { runContainerAction, runProjectAction, findContainer, findProject } = backend
@@ -120,7 +121,7 @@ const onHoverTooltip = (node: ContainerListNode, type: ContainerListNodeTooltipT
 const handleAction = async (action: DockerContainerAction | DockerProjectAction, data: ContainerListNodeData) => {
   notify({
     level: 'info',
-    title: `TODO — Action: ${action}, Target: ${getDisplayName(data)} (${isContainerData(data) ? 'container' : 'project'})`,
+    title: `Action: ${action}, Target: ${getDisplayName(data)} (${isContainerData(data) ? 'container' : 'project'})`,
     toastMs: 3000,
   })
 
@@ -137,7 +138,8 @@ const handleSelect = (node: TreeNode) => {
     if (isContainerData(node.data)) {
       const { id } = node.data
       log.debug(`Container selected — ID: ${id}`)
-      setCurrentTab({ route: ['containers', `container=${id}`] })
+      // setCurrentTab({ route: ['containers', `container=${id}`] })
+      pushToCurrentTab(`container=${id}`)
     } else if (isProjectData(node.data)) {
       const { project } = node.data
       log.debug(`Project selected: ${project}`)
@@ -145,6 +147,22 @@ const handleSelect = (node: TreeNode) => {
     }
   }
 }
+
+// Custom resize logic to prevent text selection while resizing columns.
+// PrimeVue does not seem to provide any built-in solutions for that,
+// so this is the end result of that...
+const isResizing = ref(false)
+const onResizeStart = (e: PointerEvent) => {
+  if ((e.target as HTMLElement).classList.contains('p-treetable-column-resizer')) {
+    isResizing.value = true
+  }
+}
+
+const preventSelect = (e: Event) => {
+  if (isResizing.value) e.preventDefault()
+}
+document.addEventListener('selectstart', preventSelect)
+onUnmounted(() => document.removeEventListener('selectstart', preventSelect))
 
 /**
  * Cache of nodes by key. Container nodes can be reused when `receiptDurable` is unchanged,
@@ -265,7 +283,16 @@ const hierarchy = computed<ContainerListNode[]>(() => {
 </script>
 
 <template>
-  <TreeTable :value="hierarchy" :indentation="0" selection-mode="single" resizable-columns @node-select="handleSelect">
+  <TreeTable
+    :value="hierarchy"
+    :indentation="0"
+    selection-mode="single"
+    resizable-columns
+    @node-select="handleSelect"
+    :class="{ 'treetable-resizing': isResizing }"
+    @pointerdown.capture="onResizeStart"
+    @column-resize-end="isResizing = false"
+  >
     <Column :expander="true" align-frozen="left" :style="{ width: '1%' }" />
     <Column header="State" :style="{ width: '1%' }" :header-style="{ textAlign: 'center' }">
       <template #body="{ node }">
@@ -347,5 +374,9 @@ const hierarchy = computed<ContainerListNode[]>(() => {
 :deep(.p-treetable-column-resizer:hover),
 :deep(.p-treetable-column-resizer-helper) {
   opacity: 1;
+}
+
+.treetable-resizing {
+  user-select: none;
 }
 </style>

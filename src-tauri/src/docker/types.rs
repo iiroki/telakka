@@ -71,7 +71,7 @@ pub struct DockerContainer {
     pub status: String,
     pub status_detail: Option<String>,
 
-    pub labels: BTreeMap<String, Option<String>>,
+    // pub labels: BTreeMap<String, Option<String>>,
     pub ports: Vec<DockerNetworkBinding>,
     pub platform: DockerContainerPlatform,
 
@@ -123,6 +123,8 @@ pub struct DockerContainerComposeInfo {
     pub project: String,
     /// Service name within the project.
     pub service: String,
+    /// Compose file paths the project was created from.
+    pub config_files: Vec<String>,
 }
 
 #[derive(Type, Serialize)]
@@ -143,6 +145,17 @@ pub struct DockerContainerStats {
     pub net_io_available: Option<String>,
 
     pub pids: i32,
+}
+
+#[derive(Type, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DockerContainerInspect {
+    pub labels: BTreeMap<String, String>,
+    pub env: BTreeMap<String, String>,
+
+    // Future fields:
+    // - Networks
+    // - Mounts & volumes
 }
 
 #[derive(Type, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]

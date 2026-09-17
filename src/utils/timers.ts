@@ -35,9 +35,7 @@ export const createSafeInterval = (
         // NOP
       }
     } finally {
-      busy = false
-
-      // Backoff (if defined)
+      // Backoff (if defined) — `busy` is kept reserved so overlapping ticks are skipped while waiting.
       if (errorCount > 0) {
         const backoffMs = typeof opt?.backoffMs === 'function' ? opt.backoffMs(errorCount) : (opt?.backoffMs ?? -1)
 
@@ -45,6 +43,8 @@ export const createSafeInterval = (
           await new Promise((r) => setTimeout(r, backoffMs))
         }
       }
+
+      busy = false
     }
   }
 

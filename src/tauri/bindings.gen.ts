@@ -38,7 +38,6 @@ export type DockerContainer = {
 	stateRaw: string | null,
 	status: string,
 	statusDetail: string | null,
-	labels: { [key in string]: string | null },
 	ports: DockerNetworkBinding[],
 	platform: DockerContainerPlatform,
 	// Docker Compose info, if available.
@@ -67,6 +66,8 @@ export type DockerContainerComposeInfo = {
 	project: string,
 	// Service name within the project.
 	service: string,
+	// Compose file paths the project was created from.
+	configFiles: string[],
 };
 
 export type DockerContainerPlatform = {

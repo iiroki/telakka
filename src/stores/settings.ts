@@ -5,11 +5,22 @@ import { useNotificationStore } from './notification'
 import { storage } from '../utils/storage'
 import z from 'zod/v4'
 
+/**
+ * Every field is defaulted, so the schema is the single source of the default settings
+ * and partially persisted settings are filled in on load.
+ */
 export const zSettings = z.object({
-  theme: z.object({
-    mode: z.literal(THEME_MODES),
-    accentColor: z.literal(THEME_ACCENT_COLORS),
-  }),
+  theme: z
+    .object({
+      mode: z.literal(THEME_MODES).default('system'),
+      accentColor: z.literal(THEME_ACCENT_COLORS).default('indigo'),
+    })
+    .prefault({}),
+  containers: z
+    .object({
+      groupByProject: z.boolean().default(true),
+    })
+    .prefault({}),
 })
 
 export type Settings = DeepReadonly<z.infer<typeof zSettings>>
@@ -18,8 +29,8 @@ const SETTINGS_KEY = 'settings'
 
 export const useSettingsStore = defineStore('settings', () => {
   const { notify } = useNotificationStore()
-  // TODO: Default from backend
-  const settings = ref<Settings>({ theme: { mode: 'system', accentColor: 'indigo' } })
+  const settings = ref<Settings>(zSettings.parse({}))
+
   const loadSettings = async () => {
     try {
       const s = await storage.read(SETTINGS_KEY, zSettings)

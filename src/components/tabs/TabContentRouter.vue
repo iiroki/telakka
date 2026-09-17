@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { TabState } from '../../stores/tabs'
-import ContainerList from '../containers/ContainerList.vue'
+import ContainerListPage from '../pages/ContainerListPage.vue'
 import ContainerPage from '../pages/ContainerPage.vue'
 import SettingsPage from '../pages/SettingsPage.vue'
 import TabContainerRouter from './TabContainerRouter.vue'
@@ -25,7 +25,7 @@ const root = computed(() => (tab.route.length > 0 ? tab.route[0] : null))
   </div>
   <div v-else-if="root === 'containers'">
     <template v-if="tab.route.length === 1">
-      <ContainerList />
+      <ContainerListPage />
     </template>
     <template v-else-if="tab.route.length === 2">
       <TabContainerRouter :segment="tab.route[1]" />

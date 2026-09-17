@@ -4,6 +4,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use serde::Deserialize;
 
 use crate::docker::types::DockerCommand;
+use crate::utils::string::split_comma;
 
 use super::cli::Docker;
 use super::types::{
@@ -105,6 +106,8 @@ const LABEL_COMPOSE_PROJECT: &str = "com.docker.compose.project";
 const LABEL_COMPOSE_SERVICE: &str = "com.docker.compose.service";
 const LABEL_COMPOSE_PROJECT_CONFIG_FILES: &str = "com.docker.compose.project.config_files";
 
+// 
+
 pub fn get_status() -> Result<DockerStatus, String> {
     let raw: DockerVersionRaw = Docker::cmd("version")
         .json()
@@ -190,9 +193,6 @@ pub fn run_project_action(action: &DockerProjectAction, project: &str) -> Result
         .arg(command)
         .log_prefix(log::Level::Info, "Docker project action");
 
-    let _project_file = extract_project_config_file(&project_container)
-        .ok_or_else(|| format!("Project config file not found: {}", project))?;
-
     cli.run()?;
     Ok(())
 }
@@ -224,15 +224,6 @@ fn get_project_container(project: &str) -> Result<DockerContainer, String> {
         .run_json()?;
 
     Ok(raw.into())
-}
-
-fn extract_project_config_file(container: &DockerContainer) -> Option<String> {
-    container
-        .labels
-        .get(LABEL_COMPOSE_PROJECT_CONFIG_FILES)
-        .and_then(|l| l.as_deref())
-        .and_then(|l| l.split(',').map(str::trim).next())
-        .map(|f| f.to_owned())
 }
 
 fn create_project_container_command(project: &str) -> Docker {
@@ -307,7 +298,17 @@ fn extract_compose_labels(
 ) -> Option<DockerContainerComposeInfo> {
     let project = labels.get(LABEL_COMPOSE_PROJECT)?.clone()?;
     let service = labels.get(LABEL_COMPOSE_SERVICE)?.clone()?;
-    Some(DockerContainerComposeInfo { project, service })
+    let config_files = labels
+        .get(LABEL_COMPOSE_PROJECT_CONFIG_FILES)
+        .and_then(|l| l.as_deref())
+        .map(split_comma)
+        .unwrap_or_default();
+
+    Some(DockerContainerComposeInfo {
+        project,
+        service,
+        config_files,
+    })
 }
 
 /// Parses the `Status` string — format: `"{status} ({status_detail})"`.
@@ -382,7 +383,7 @@ fn hash_receipts(container: &DockerContainer) -> (String, String) {
     container.name.hash(&mut hasher_durable);
     container.image.hash(&mut hasher_durable);
     container.state.hash(&mut hasher_durable);
-    container.labels.hash(&mut hasher_durable);
+    // container.labels.hash(&mut hasher_durable);
     container.ports.hash(&mut hasher_durable);
     container.platform.hash(&mut hasher_durable);
     container.compose.hash(&mut hasher_durable);
@@ -412,7 +413,7 @@ impl From<DockerContainerRaw> for DockerContainer {
             state_raw,
             status,
             status_detail,
-            labels,
+            // labels,
             ports: parse_ports(&raw.ports, false),
             platform: DockerContainerPlatform {
                 architecture: raw.platform.architecture,
