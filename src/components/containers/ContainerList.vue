@@ -288,8 +288,8 @@ const hierarchy = computed<ContainerListNode[]>(() => {
     :indentation="0"
     selection-mode="single"
     resizable-columns
-    @node-select="handleSelect"
     :class="{ 'treetable-resizing': isResizing }"
+    @node-select="handleSelect"
     @pointerdown.capture="onResizeStart"
     @column-resize-end="isResizing = false"
   >

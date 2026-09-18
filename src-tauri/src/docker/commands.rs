@@ -106,7 +106,7 @@ const LABEL_COMPOSE_PROJECT: &str = "com.docker.compose.project";
 const LABEL_COMPOSE_SERVICE: &str = "com.docker.compose.service";
 const LABEL_COMPOSE_PROJECT_CONFIG_FILES: &str = "com.docker.compose.project.config_files";
 
-// 
+//
 
 pub fn get_status() -> Result<DockerStatus, String> {
     let raw: DockerVersionRaw = Docker::cmd("version")

@@ -2,13 +2,13 @@
 import { AccordionContent, AccordionHeader, AccordionPanel } from 'primevue'
 
 defineProps<{
-  readonly key: string
+  readonly value: string
   readonly label: string
 }>()
 </script>
 
 <template>
-  <AccordionPanel :value="key">
+  <AccordionPanel :value="value">
     <AccordionHeader>{{ label }}</AccordionHeader>
     <AccordionContent>
       <slot />

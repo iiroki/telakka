@@ -1,4 +1,4 @@
-import Aura from '@primeuix/themes/aura'
+import Aura from '@primeuix/themes/aura-compat'
 import { definePreset, updatePrimaryPalette } from '@primeuix/themes'
 import { PaletteDesignToken } from '@primeuix/themes/types'
 

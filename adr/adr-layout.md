@@ -5,6 +5,8 @@
 - **Tab bar (top)**
   - Opened tabs — first tab (containers) is created automatically on startup
   - New tab button "+"
+    - Should be sticky glued to the right
+    - Should be disabled if there's max amount of tabs (default: 100)
 - **Main area** — contains the active tab content:
   - **Workspace tabs** — a left sidebar and a main content area:
     - Left sidebar (icon-only menu with tooltips):

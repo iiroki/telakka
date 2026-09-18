@@ -9,8 +9,8 @@ const formatted = format(() => segment)
 
 <template>
   <span
+    v-tooltip.bottom="formatted.label"
     style="
-      font-weight: bold;
       width: 150px;
       height: 1.1rem;
       display: inline-flex;
@@ -26,7 +26,7 @@ const formatted = format(() => segment)
       :class="formatted.icon"
       style="margin-right: 0.25rem; flex-shrink: 0; margin-right: 0.5rem"
     />
-    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">
+    <span :class="formatted.class" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis">
       {{ formatted.label }}
     </span>
   </span>

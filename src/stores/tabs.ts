@@ -7,11 +7,7 @@ export type TabRouteSpecialSegment = '_settings' | '_notifications' | '_resource
 export type TabRouteDetail = 'container' | 'project'
 
 export type TabRouteSegment =
-  | TabRouteRootSegment
-  | TabRouteSpecialSegment
-  | `${TabRouteDetail}=${string}`
-  | 'logs'
-  | '_unknown'
+  TabRouteRootSegment | TabRouteSpecialSegment | `${TabRouteDetail}=${string}` | 'logs' | '_unknown'
 
 export type TabRoute = TabRouteSegment[]
 

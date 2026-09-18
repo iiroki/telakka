@@ -152,7 +152,6 @@ pub struct DockerContainerStats {
 pub struct DockerContainerInspect {
     pub labels: BTreeMap<String, String>,
     pub env: BTreeMap<String, String>,
-
     // Future fields:
     // - Networks
     // - Mounts & volumes

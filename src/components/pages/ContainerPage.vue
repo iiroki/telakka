@@ -20,7 +20,7 @@ const container = useContainer(id)
         ]"
       />
       <Accordion>
-        <AccordionItem key="labels" label="Labels">
+        <AccordionItem value="labels" label="Labels">
           <KeyValueTable class="mono" :rows="[]" />
         </AccordionItem>
       </Accordion>
