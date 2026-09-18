@@ -1,4 +1,5 @@
 mod docker;
+mod log;
 mod storage;
 mod utils;
 
@@ -7,7 +8,7 @@ use docker::types::{
     DockerContainerAction, DockerContainerResult, DockerContainerStats, DockerProjectAction,
     DockerStatus,
 };
-use storage::{storage_read_json, storage_write_json};
+use storage::{storage_get_dir, storage_read_json, storage_write_json};
 use tauri_specta::{collect_commands, Builder};
 
 #[tauri::command]
@@ -61,6 +62,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
         get_container_stats,
         run_container_action,
         run_project_action,
+        storage_get_dir,
         storage_read_json,
         storage_write_json,
     ])
@@ -70,12 +72,12 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
 pub fn run() {
     let builder = specta_builder();
     tauri::Builder::default()
-        .plugin(
-            tauri_plugin_log::Builder::new()
-                .level(tauri_plugin_log::log::LevelFilter::Info) // Configurable log level?
-                .build(),
-        )
+        .plugin(log::init())
         .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            storage::init(app.handle())?;
+            Ok(())
+        })
         .invoke_handler(builder.invoke_handler())
         .run(tauri::generate_context!())
         .expect("Error while running Tauri app");

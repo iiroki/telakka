@@ -3,7 +3,9 @@ import { Button, FloatLabel, Select } from 'primevue'
 import { THEME_ACCENT_COLORS, THEME_MODES } from '../../theme'
 import { useSettingsStore, zSettings } from '../../stores/settings'
 import { Form, FormSubmitEvent } from '@primevue/forms'
-import { reactive } from 'vue'
+import { reactive, ref } from 'vue'
+import { revealItemInDir } from '@tauri-apps/plugin-opener'
+import { commands } from '../../tauri/bindings.gen'
 import { expandObject, flattenObject } from '../../utils/obj'
 import Dot from '../common/Dot.vue'
 import LabelCheckbox from '../common/LabelCheckbox.vue'
@@ -11,16 +13,40 @@ import LabelCheckbox from '../common/LabelCheckbox.vue'
 // Take a copy of the settings, modify it, and save when ready.
 const { settings, saveSettings } = useSettingsStore()
 const init = reactive(flattenObject(settings))
+const dir = ref<string | null>(null)
+
 const onSubmit = (e: FormSubmitEvent<Record<string, unknown>>) => {
   const parsed = zSettings.safeParse(expandObject(e.values))
   if (parsed.success) {
     saveSettings(parsed.data)
   }
 }
+
+const openDir = () => {
+  if (dir.value) {
+    revealItemInDir(dir.value)
+  }
+}
+
+commands.storageGetDir().then((r) => (dir.value = r.status === 'ok' ? r.data : null))
 </script>
 
 <template>
   <h2>Settings</h2>
+
+  <div class="settings-dir" style="margin-bottom: 0.5rem">
+    <span>{{ dir ?? '???' }}</span>
+    <Button
+      v-tooltip.top="'Open'"
+      icon="pi pi-folder-open"
+      text
+      rounded
+      size="small"
+      severity="secondary"
+      @click="openDir"
+    />
+  </div>
+
   <Form :initial-values="init" style="display: flex; flex-direction: column; gap: 2rem" @submit="onSubmit">
     <div class="settings-block">
       <h3>Theme</h3>
@@ -63,6 +89,15 @@ const onSubmit = (e: FormSubmitEvent<Record<string, unknown>>) => {
 </template>
 
 <style scoped>
+.settings-dir {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: monospace;
+  font-size: 0.875rem;
+  color: var(--p-text-muted-color);
+}
+
 .settings-block {
   display: flex;
   flex-direction: column;

@@ -78,6 +78,11 @@ const Theme = definePreset(Aura, {
         transitionDuration: '0s',
       },
     },
+    tooltip: {
+      root: {
+        maxWidth: '32rem',
+      },
+    },
   },
   css: () => `
     :root {

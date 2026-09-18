@@ -3,6 +3,12 @@ use tauri::Manager;
 
 #[tauri::command]
 #[specta::specta]
+pub async fn storage_get_dir(app: tauri::AppHandle) -> Result<String, String> {
+    Ok(storage_dir(&app).to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+#[specta::specta]
 pub async fn storage_read_json(
     app: tauri::AppHandle,
     key: String,
@@ -28,9 +34,14 @@ pub async fn storage_write_json(
     fs::write(&path, value).map_err(|e| e.to_string())
 }
 
+pub fn init(app: &tauri::AppHandle) -> std::io::Result<()> {
+    fs::create_dir_all(storage_dir(app))
+}
+
+fn storage_dir(app: &tauri::AppHandle) -> std::path::PathBuf {
+    app.path().app_data_dir().unwrap()
+}
+
 fn storage_path_json(app: &tauri::AppHandle, key: &str) -> std::path::PathBuf {
-    app.path()
-        .app_data_dir()
-        .unwrap()
-        .join(format!("{key}.json"))
+    storage_dir(app).join(format!("{key}.json"))
 }

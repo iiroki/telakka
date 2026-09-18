@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Column, TreeTable } from 'primevue'
-import { computed, onUnmounted, ref } from 'vue'
+import { Button, Column, IconField, InputIcon, InputText, TreeTable } from 'primevue'
+import { computed, onUnmounted, ref, watch, type ComponentPublicInstance } from 'vue'
 import { storeToRefs } from 'pinia'
 import {
   DockerComposeProject as ProjectData,
@@ -15,6 +15,9 @@ import ContainerStateIcon from './ContainerStateIcon.vue'
 import { useNotificationStore } from '../../stores/notification'
 import ContainerActionButton from './ContainerActionButton.vue'
 import { useTabStore } from '../../stores/tabs'
+import { useSettingsStore } from '../../stores/settings'
+import { useUiStore, zTableOptions } from '../../stores/ui'
+import { useShortcut } from '../../composables/shortcuts'
 import { log } from '../../utils/log'
 import { createStyle } from '../../utils/style'
 
@@ -35,15 +38,18 @@ type ContainerData = Pick<DockerContainer, 'id' | 'name' | 'state' | 'image' | '
 
 type ContainerListNodeData = ContainerData | ProjectData
 type ContainerListNode = TypedTreeNode<ContainerListNodeData>
-type ContainerListNodeTooltipType = 'state' | 'name' | 'ports'
+type ContainerListNodeTooltipType = 'state' | 'name' | 'image' | 'ports'
 
 const PROJECT_PREFIX = '__project__'
+const UI_OPTIONS_KEY = 'containers'
 
 const { setCurrentTab, pushToCurrentTab } = useTabStore()
 const backend = useBackendStore()
 const { containers, projects } = storeToRefs(backend)
 const { runContainerAction, runProjectAction, findContainer, findProject } = backend
 const { notify } = useNotificationStore()
+const ui = useUiStore()
+const { settings } = storeToRefs(useSettingsStore())
 
 const isContainerListNode = (node: TreeNode): node is ContainerListNode => 'state' in node.data
 const isContainerData = (data: ContainerListNodeData): data is ContainerData => 'id' in data
@@ -81,17 +87,19 @@ const buildHoverTooltip = (
   type: ContainerListNodeTooltipType,
 ): string | null => {
   if (type === 'state') {
+    // Container
     if (isContainerData(data)) {
       const live = findContainer(data.id).value
       if (!live) {
-        return null
+        return '???'
       }
 
-      return [live.state, live.status, live.statusDetail].filter(Boolean).join('\n')
+      return ['Container', live.state, live.status, live.statusDetail].filter(Boolean).join('\n')
     }
+    // Project
     if (isProjectData(data)) {
       const live = findProject(data.project).value
-      return live?.state ?? null
+      return ['Project', live?.state ?? '???'].filter(Boolean).join('\n')
     }
   } else if (type === 'name') {
     if (isContainerData(data)) {
@@ -101,6 +109,12 @@ const buildHoverTooltip = (
       }
 
       return live.name
+    } else if (isProjectData(data)) {
+      return findProject(data.project)?.value?.project ?? null
+    }
+  } else if (type === 'image') {
+    if (isContainerData(data)) {
+      return data.image
     }
   } else if (type === 'ports') {
     if (isContainerData(data)) {
@@ -148,21 +162,49 @@ const handleSelect = (node: TreeNode) => {
   }
 }
 
+//
+// COLUMN RESIZE:
 // Custom resize logic to prevent text selection while resizing columns.
 // PrimeVue does not seem to provide any built-in solutions for that,
 // so this is the end result of that...
+//
+
+const table = ref<ComponentPublicInstance | null>(null)
 const isResizing = ref(false)
+
 const onResizeStart = (e: PointerEvent) => {
   if ((e.target as HTMLElement).classList.contains('p-treetable-column-resizer')) {
     isResizing.value = true
   }
 }
 
-const preventSelect = (e: Event) => {
-  if (isResizing.value) e.preventDefault()
+const onResizeEnd = () => {
+  isResizing.value = false
+
+  const root = table.value?.$el as HTMLElement | undefined
+  const headers = [...(root?.querySelectorAll<HTMLElement>('thead > tr > th') ?? [])]
+  const total = headers.reduce((sum, h) => sum + h.offsetWidth, 0)
+  if (total === 0) {
+    return
+  }
+
+  const widths = headers.map((h) => h.offsetWidth / total)
+  ui.set(UI_OPTIONS_KEY, { columns: { widths } })
 }
+
+const preventSelect = (e: Event) => {
+  if (isResizing.value) {
+    e.preventDefault()
+  }
+}
+
 document.addEventListener('selectstart', preventSelect)
 onUnmounted(() => document.removeEventListener('selectstart', preventSelect))
+ui.get(UI_OPTIONS_KEY, zTableOptions)
+
+//
+// DATA
+//
 
 /**
  * Cache of nodes by key. Container nodes can be reused when `receiptDurable` is unchanged,
@@ -184,6 +226,7 @@ const hierarchy = computed<ContainerListNode[]>(() => {
   const stale = new Set(nodes.keys())
   const projectMap = new Map<string, ProjectData>()
   projects.value.forEach((p) => projectMap.set(toProjectKey(p), p))
+  const groupByProject = settings.value.containers.groupByProject
 
   // Phase 1:
   //   Build container nodes or reuse ones from the cache, if durable receipts have not changed.
@@ -194,9 +237,19 @@ const hierarchy = computed<ContainerListNode[]>(() => {
   const ordered = new Map<string, ContainerListNode | ContainerListNode[]>()
   const changedProjects = new Set<string>()
 
+  const filter = search.value.trim().toLowerCase()
   for (const container of containers.value) {
-    const containerKey = toContainerKey(container)
+    const filterFields = [
+      container.name,
+      container.image,
+      ...container.ports.map((p) => `${p.hostPort ?? ''}:${p.containerPort}`),
+    ]
 
+    if (filter && !filterFields.some((v) => v.toLowerCase().includes(filter))) {
+      continue
+    }
+
+    const containerKey = toContainerKey(container)
     const cached = nodes.get(containerKey)
     const useCached =
       !!cached && isContainerData(cached.data) && cached.data.receiptDurable === container.receiptDurable
@@ -207,14 +260,14 @@ const hierarchy = computed<ContainerListNode[]>(() => {
     } else {
       containerNode = {
         key: containerKey,
-        data: toContainerData(container),
-        styleClass: container.compose ? 'treetable-child-tint' : undefined,
+        data: toContainerData(container, groupByProject),
+        styleClass: container.compose && groupByProject ? 'treetable-child-tint' : undefined,
       }
 
       nodes.set(containerKey, containerNode)
     }
 
-    if (container.compose) {
+    if (container.compose && groupByProject) {
       const projectKey = toProjectKey(container.compose)
       let arr = ordered.get(projectKey)
       if (!arr || !Array.isArray(arr)) {
@@ -280,21 +333,51 @@ const hierarchy = computed<ContainerListNode[]>(() => {
 
   return result
 })
+
+// Grouping changes node data without changing the receipts, so the cache must be dropped on toggle.
+watch(
+  () => settings.value.containers.groupByProject,
+  () => nodes.clear(),
+)
+
+//
+// SEARCH
+//
+
+const search = ref('')
+const searchInput = ref<ComponentPublicInstance | null>(null)
+useShortcut({ key: 'f', mod: true }, () => (searchInput.value?.$el as HTMLInputElement | undefined)?.focus())
+
+// Notes:
+// - "maxWidth" = 0 kills content-driven column growth
 </script>
 
 <template>
   <TreeTable
+    ref="table"
     :value="hierarchy"
     :indentation="0"
     selection-mode="single"
     resizable-columns
+    column-resize-mode="fit"
     :class="{ 'treetable-resizing': isResizing }"
     @node-select="handleSelect"
     @pointerdown.capture="onResizeStart"
-    @column-resize-end="isResizing = false"
+    @column-resize-end="onResizeEnd"
   >
-    <Column :expander="true" align-frozen="left" :style="{ width: '1%' }" />
-    <Column header="State" :style="{ width: '1%' }" :header-style="{ textAlign: 'center' }">
+    <template #header>
+      <div class="header">
+        <IconField class="search">
+          <InputIcon class="pi pi-search" />
+          <InputText ref="searchInput" v-model="search" placeholder="Search" size="small" fluid />
+        </IconField>
+
+        <Button icon="pi pi-columns-2" label="Columns" variant="text" severity="secondary" size="small" />
+        <Button icon="pi pi-ellipsis-v" variant="text" severity="secondary" size="small" />
+      </div>
+    </template>
+
+    <Column header="State" expander :style="{ width: '1%' }">
       <template #body="{ node }">
         <template v-if="isContainerListNode(node)">
           <span
@@ -311,7 +394,7 @@ const hierarchy = computed<ContainerListNode[]>(() => {
         </template>
       </template>
     </Column>
-    <Column header="Name" :body-style="{ fontFamily: 'monospace' }">
+    <Column header="Name" :body-style="{ fontFamily: 'monospace', maxWidth: 0 }">
       <template #body="{ node }">
         <template v-if="isContainerListNode(node)">
           <span
@@ -323,17 +406,23 @@ const hierarchy = computed<ContainerListNode[]>(() => {
         </template>
       </template>
     </Column>
-    <Column
-      header="Image"
-      :field="(data: ContainerListNodeData) => (isContainerData(data) ? data.image : '')"
-      :body-style="{ fontFamily: 'monospace' }"
-    />
-    <Column
-      header="Platform"
-      :field="(data: ContainerListNodeData) => (isContainerData(data) ? data.platform : '')"
-      :body-style="{ fontFamily: 'monospace' }"
-    />
-    <Column header="Ports">
+    <Column header="Image" :body-style="{ fontFamily: 'monospace', maxWidth: 0 }">
+      <template #body="{ node }">
+        <span
+          v-if="isContainerNode(node)"
+          v-tooltip.top="{ value: hoverTooltip, pt: { text: { style: createStyle({ fontFamily: 'monospace' }) } } }"
+          @pointerenter="onHoverTooltip(node, 'image')"
+        >
+          {{ node.data.image }}
+        </span>
+      </template>
+    </Column>
+    <Column header="Platform" :body-style="{ fontFamily: 'monospace', maxWidth: 0 }">
+      <template #body="{ node }">
+        <span v-if="isContainerNode(node)">{{ node.data.platform }}</span>
+      </template>
+    </Column>
+    <Column header="Ports" :body-style="{ maxWidth: 0 }">
       <template #body="{ node }">
         <template v-if="isContainerNode(node)">
           <span v-tooltip.top="{ value: hoverTooltip }" @pointerenter="onHoverTooltip(node, 'ports')">
@@ -358,8 +447,36 @@ const hierarchy = computed<ContainerListNode[]>(() => {
 </template>
 
 <style scoped>
+.header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* PrimeIcons sit slightly low in their em box next to a button label */
+.header :deep(.p-button-icon) {
+  transform: translateY(1px);
+}
+
+.search {
+  flex: 1;
+  max-width: 20rem;
+  margin-right: auto;
+}
+
 :deep(.p-treetable-tbody > tr) {
   cursor: pointer;
+}
+
+:deep(.p-treetable-body-cell-content) {
+  min-width: 0;
+}
+
+:deep(.p-treetable-body-cell-content > *) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 :deep(.p-treetable-column-resizer) {
