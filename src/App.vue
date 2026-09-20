@@ -90,4 +90,12 @@ h6 {
 .p-treetable-tbody > tr:hover > td {
   background-color: color-mix(in srgb, var(--p-text-color) 12%, var(--p-content-background));
 }
+
+.p-datatable-tbody > tr.datatable-child-tint > td {
+  background-color: color-mix(in srgb, var(--p-text-color) 5%, var(--p-content-background));
+}
+
+.p-datatable-tbody > tr:hover > td {
+  background-color: color-mix(in srgb, var(--p-text-color) 12%, var(--p-content-background));
+}
 </style>

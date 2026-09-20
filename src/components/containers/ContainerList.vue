@@ -20,6 +20,7 @@ import { useUiStore, zTableOptions } from '../../stores/ui'
 import { useShortcut } from '../../composables/shortcuts'
 import { log } from '../../utils/log'
 import { createStyle } from '../../utils/style'
+import type { TableColumn } from '../types'
 
 // Move to some utility types
 type KnownKeys<T> = {
@@ -38,10 +39,14 @@ type ContainerData = Pick<DockerContainer, 'id' | 'name' | 'state' | 'image' | '
 
 type ContainerListNodeData = ContainerData | ProjectData
 type ContainerListNode = TypedTreeNode<ContainerListNodeData>
-type ContainerListNodeTooltipType = 'state' | 'name' | 'image' | 'ports'
+type ContainerColumnKey = 'state' | 'name' | 'image' | 'platform' | 'ports' | 'actions'
+type ContainerColumn = TableColumn<ContainerListNodeData, ContainerColumnKey>
 
 const PROJECT_PREFIX = '__project__'
 const UI_OPTIONS_KEY = 'containers'
+
+const MONOSPACE_STYLE = { fontFamily: 'monospace' }
+const MONOSPACE_TOOLTIP_PT = { text: { style: createStyle(MONOSPACE_STYLE) } }
 
 const { setCurrentTab, pushToCurrentTab } = useTabStore()
 const backend = useBackendStore()
@@ -53,7 +58,7 @@ const { settings } = storeToRefs(useSettingsStore())
 
 const isContainerListNode = (node: TreeNode): node is ContainerListNode => 'state' in node.data
 const isContainerData = (data: ContainerListNodeData): data is ContainerData => 'id' in data
-const isContainerNode = (node: TreeNode): node is TypedTreeNode<ContainerData> => isContainerData(node.data)
+// const isContainerNode = (node: TreeNode): node is TypedTreeNode<ContainerData> => isContainerData(node.data)
 const isProjectData = (data: ContainerListNodeData): data is ProjectData => 'project' in data
 const isProjectNode = (node: TreeNode): node is TypedTreeNode<ProjectData> => isProjectData(node.data)
 
@@ -82,10 +87,7 @@ const toProjectKey = (project: string | ProjectData | DockerContainerComposeInfo
 
 /** Currently active hover tooltip. */
 const hoverTooltip = ref<string | null>(null)
-const buildHoverTooltip = (
-  { data }: Pick<ContainerListNode, 'data'>,
-  type: ContainerListNodeTooltipType,
-): string | null => {
+const buildHoverTooltip = ({ data }: Pick<ContainerListNode, 'data'>, type: ContainerColumnKey): string | null => {
   if (type === 'state') {
     // Container
     if (isContainerData(data)) {
@@ -94,7 +96,7 @@ const buildHoverTooltip = (
         return '???'
       }
 
-      return ['Container', live.state, live.status, live.statusDetail].filter(Boolean).join('\n')
+      return ['Container', live.state, live.status + ' ' + live.statusDetail].filter(Boolean).join('\n')
     }
     // Project
     if (isProjectData(data)) {
@@ -128,7 +130,7 @@ const buildHoverTooltip = (
   return null
 }
 
-const onHoverTooltip = (node: ContainerListNode, type: ContainerListNodeTooltipType) => {
+const onHoverTooltip = (node: ContainerListNode, type: ContainerColumnKey) => {
   hoverTooltip.value = buildHoverTooltip(node, type)
 }
 
@@ -348,8 +350,41 @@ const search = ref('')
 const searchInput = ref<ComponentPublicInstance | null>(null)
 useShortcut({ key: 'f', mod: true }, () => (searchInput.value?.$el as HTMLInputElement | undefined)?.focus())
 
+//
+// COLUMNS
+//
+
 // Notes:
 // - "maxWidth" = 0 kills content-driven column growth
+const COLUMNS: ContainerColumn[] = [
+  { key: 'state', header: 'State', expander: true, style: { width: '1%' } },
+  { key: 'name', header: 'Name', monospace: true, value: getDisplayName },
+  { key: 'image', header: 'Image', monospace: true, value: (d) => (isContainerData(d) ? d.image : null) },
+  { key: 'platform', header: 'Platform', monospace: true, value: (d) => (isContainerData(d) ? d.platform : null) },
+  {
+    key: 'ports',
+    header: 'Ports',
+    value: (d) =>
+      isContainerData(d)
+        ? d.ports
+            .filter((p) => !!p.hostPort)
+            .map((p) => `${p.hostPort}:${p.containerPort}`)
+            .join('\n')
+        : null,
+  },
+  { key: 'actions', header: 'Actions' },
+]
+
+// TODO: Filter + order
+const columns: ContainerColumn[] = COLUMNS.map((col, index) => ({
+  ...col,
+  index,
+  bodyStyle: {
+    ...(col.value ? { maxWidth: 0 } : undefined),
+    ...(col.monospace ? MONOSPACE_STYLE : undefined),
+    ...col.bodyStyle,
+  },
+}))
 </script>
 
 <template>
@@ -377,13 +412,21 @@ useShortcut({ key: 'f', mod: true }, () => (searchInput.value?.$el as HTMLInputE
       </div>
     </template>
 
-    <Column header="State" expander :style="{ width: '1%' }">
+    <Column
+      v-for="col in columns"
+      :key="col.key"
+      :header="col.header"
+      :expander="col.expander"
+      :style="col.style"
+      :body-style="col.bodyStyle"
+    >
       <template #body="{ node }">
         <template v-if="isContainerListNode(node)">
           <span
+            v-if="col.key === 'state'"
             v-tooltip.top="hoverTooltip"
             :style="{ display: 'flex', justifyContent: 'center', width: '100%' }"
-            @pointerenter="onHoverTooltip(node, 'state')"
+            @pointerenter="onHoverTooltip(node, col.key)"
           >
             <ContainerStateIcon
               :type="isProjectNode(node) ? 'project' : 'container'"
@@ -391,55 +434,20 @@ useShortcut({ key: 'f', mod: true }, () => (searchInput.value?.$el as HTMLInputE
               :style="{ fontSize: '1.5rem' }"
             />
           </span>
-        </template>
-      </template>
-    </Column>
-    <Column header="Name" :body-style="{ fontFamily: 'monospace', maxWidth: 0 }">
-      <template #body="{ node }">
-        <template v-if="isContainerListNode(node)">
+
+          <ContainerActionButton
+            v-else-if="col.key === 'actions'"
+            :data="node.data"
+            @action="(a) => handleAction(a, node.data)"
+          />
+
           <span
-            v-tooltip.top="{ value: hoverTooltip, pt: { text: { style: createStyle({ fontFamily: 'monospace' }) } } }"
-            @pointerenter="onHoverTooltip(node, 'name')"
+            v-else-if="col.value?.(node.data) != null"
+            v-tooltip.top="{ value: hoverTooltip, pt: col.monospace ? MONOSPACE_TOOLTIP_PT : undefined }"
+            @pointerenter="onHoverTooltip(node, col.key)"
           >
-            {{ getDisplayName(node.data) }}
+            {{ col.value?.(node.data) }}
           </span>
-        </template>
-      </template>
-    </Column>
-    <Column header="Image" :body-style="{ fontFamily: 'monospace', maxWidth: 0 }">
-      <template #body="{ node }">
-        <span
-          v-if="isContainerNode(node)"
-          v-tooltip.top="{ value: hoverTooltip, pt: { text: { style: createStyle({ fontFamily: 'monospace' }) } } }"
-          @pointerenter="onHoverTooltip(node, 'image')"
-        >
-          {{ node.data.image }}
-        </span>
-      </template>
-    </Column>
-    <Column header="Platform" :body-style="{ fontFamily: 'monospace', maxWidth: 0 }">
-      <template #body="{ node }">
-        <span v-if="isContainerNode(node)">{{ node.data.platform }}</span>
-      </template>
-    </Column>
-    <Column header="Ports" :body-style="{ maxWidth: 0 }">
-      <template #body="{ node }">
-        <template v-if="isContainerNode(node)">
-          <span v-tooltip.top="{ value: hoverTooltip }" @pointerenter="onHoverTooltip(node, 'ports')">
-            {{
-              node.data.ports
-                .filter((p) => !!p.hostPort)
-                .map((p) => `${p.hostPort}:${p.containerPort}`)
-                .join('\n')
-            }}
-          </span>
-        </template>
-      </template>
-    </Column>
-    <Column header="Actions">
-      <template #body="{ node }">
-        <template v-if="isContainerListNode(node)">
-          <ContainerActionButton :data="node.data" @action="(a) => handleAction(a, node.data)" />
         </template>
       </template>
     </Column>
