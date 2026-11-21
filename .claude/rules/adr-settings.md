@@ -1,1 +1,0 @@
-../../adr/adr-settings.md

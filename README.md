@@ -9,7 +9,13 @@ _Tech stack:_
 
 ## Features
 
-- TODO
+- [Containers and Docker Compose projects](./docs/features/docker.md): every container and project on the machine in one list, with search, grouping and actions.
+- [Tabs and layout](./docs/features/layout.md): multiple independent tabs, Docker status and resource usage at a glance.
+- [Settings](./docs/features/settings.md): theme, container grouping and remembered view preferences.
+- [Tables](./docs/features/tables.md): shared column, search and tooltip behavior for every resource table.
+- [Backend](./docs/features/backend.md): a stateless bridge to the Docker CLI, kept up to date by polling.
+
+See also: [glossary](./GLOSSARY.md), [architecture decisions](./docs/adr/), [roadmap](./docs/roadmap.md) and [known issues](./docs/known-issues.md).
 
 ## Background
 
@@ -23,11 +29,3 @@ One feature that was also generally missing was the ability to view and manage a
 the Docker Compose projects from a single interface.
 
 What does a developer do in this case? Build their own solution, of course!
-
-## create-tauri-app
-
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
-
-### Recommended IDE Setup
-
-- [VS Code](https://code.visualstudio.com/) + [Vue - Official](https://marketplace.visualstudio.com/items?itemName=Vue.volar) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
