@@ -5,8 +5,8 @@ mod utils;
 
 use docker::commands as DockerCommands;
 use docker::types::{
-    DockerContainerAction, DockerContainerResult, DockerContainerStats, DockerProjectAction,
-    DockerStatus,
+    DockerContainerAction, DockerContainerDetails, DockerContainerResult, DockerContainerStats,
+    DockerProjectAction, DockerStatus,
 };
 use storage::{storage_get_dir, storage_read_json, storage_write_json};
 use tauri_specta::{collect_commands, Builder};
@@ -23,6 +23,14 @@ async fn get_status() -> Result<DockerStatus, String> {
 #[specta::specta]
 async fn get_containers() -> Result<DockerContainerResult, String> {
     tauri::async_runtime::spawn_blocking(DockerCommands::get_containers)
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+#[specta::specta]
+async fn get_container_details(id: String) -> Result<DockerContainerDetails, String> {
+    tauri::async_runtime::spawn_blocking(move || DockerCommands::get_container_details(&id))
         .await
         .map_err(|e| e.to_string())?
 }
@@ -60,6 +68,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
         get_status,
         get_containers,
         get_container_stats,
+        get_container_details,
         run_container_action,
         run_project_action,
         storage_get_dir,

@@ -4,6 +4,9 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::collections::BTreeMap;
 
+/// Untyped JSON object — passthrough for keys that aren't typed yet.
+pub type JsonObject = serde_json::Map<String, serde_json::Value>;
+
 pub trait DockerCommand {
     fn as_command(&self) -> Result<&'static str, String>;
 }
@@ -149,12 +152,64 @@ pub struct DockerContainerStats {
 
 #[derive(Type, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct DockerContainerInspect {
+pub struct DockerContainerDetails {
+    pub config: DockerContainerConfig,
+    pub network_settings: DockerContainerNetworkSettings,
+    /// Mounts — volumes, bind mounts, tmpfs, etc.
+    pub mounts: Vec<DockerContainerMount>,
+    /// Remaining keys — passed through as-is.
+    #[specta(type = BTreeMap<String, specta_typescript::Unknown>)]
+    pub extra: JsonObject,
+}
+
+#[derive(Type, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DockerContainerConfig {
     pub labels: BTreeMap<String, String>,
     pub env: BTreeMap<String, String>,
-    // Future fields:
-    // - Networks
-    // - Mounts & volumes
+    /// Remaining keys — passed through as-is.
+    #[specta(type = BTreeMap<String, specta_typescript::Unknown>)]
+    pub extra: JsonObject,
+}
+
+#[derive(Type, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DockerContainerNetworkSettings {
+    /// Connected networks — sorted by name.
+    pub networks: Vec<DockerContainerNetwork>,
+    /// Remaining keys — passed through as-is.
+    #[specta(type = BTreeMap<String, specta_typescript::Unknown>)]
+    pub extra: JsonObject,
+}
+
+#[derive(Type, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DockerContainerNetwork {
+    pub name: String,
+    pub id: String,
+    pub ip_address: String,
+    pub gateway: String,
+    pub mac_address: String,
+    pub aliases: Vec<String>,
+    /// Remaining keys — passed through as-is.
+    #[specta(type = BTreeMap<String, specta_typescript::Unknown>)]
+    pub extra: JsonObject,
+}
+
+#[derive(Type, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DockerContainerMount {
+    /// Mount type — e.g. `volume`, `bind`, `tmpfs`.
+    pub kind: String,
+    /// Volume name — only for volume mounts.
+    pub name: Option<String>,
+    pub source: String,
+    pub destination: String,
+    pub mode: String,
+    pub read_write: bool,
+    /// Remaining keys — passed through as-is.
+    #[specta(type = BTreeMap<String, specta_typescript::Unknown>)]
+    pub extra: JsonObject,
 }
 
 #[derive(Type, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]

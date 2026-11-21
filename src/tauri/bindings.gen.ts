@@ -7,6 +7,7 @@ export const commands = {
 	getStatus: () => typedError<DockerStatus, string>(__TAURI_INVOKE("get_status")),
 	getContainers: () => typedError<DockerContainerResult, string>(__TAURI_INVOKE("get_containers")),
 	getContainerStats: () => typedError<DockerContainerStats[], string>(__TAURI_INVOKE("get_container_stats")),
+	getContainerDetails: (id: string) => typedError<DockerContainerDetails, string>(__TAURI_INVOKE("get_container_details", { id })),
 	runContainerAction: (command: DockerContainerAction, id: string) => typedError<null, string>(__TAURI_INVOKE("run_container_action", { command, id })),
 	runProjectAction: (command: DockerProjectAction, project: string) => typedError<null, string>(__TAURI_INVOKE("run_project_action", { command, project })),
 	storageGetDir: () => typedError<string, string>(__TAURI_INVOKE("storage_get_dir")),
@@ -69,6 +70,53 @@ export type DockerContainerComposeInfo = {
 	service: string,
 	// Compose file paths the project was created from.
 	configFiles: string[],
+};
+
+export type DockerContainerConfig = {
+	labels: { [key in string]: string },
+	env: { [key in string]: string },
+	// Remaining keys — passed through as-is.
+	extra: { [key in string]: unknown },
+};
+
+export type DockerContainerDetails = {
+	config: DockerContainerConfig,
+	networkSettings: DockerContainerNetworkSettings,
+	// Mounts — volumes, bind mounts, tmpfs, etc.
+	mounts: DockerContainerMount[],
+	// Remaining keys — passed through as-is.
+	extra: { [key in string]: unknown },
+};
+
+export type DockerContainerMount = {
+	// Mount type — e.g. `volume`, `bind`, `tmpfs`.
+	kind: string,
+	// Volume name — only for volume mounts.
+	name: string | null,
+	source: string,
+	destination: string,
+	mode: string,
+	readWrite: boolean,
+	// Remaining keys — passed through as-is.
+	extra: { [key in string]: unknown },
+};
+
+export type DockerContainerNetwork = {
+	name: string,
+	id: string,
+	ipAddress: string,
+	gateway: string,
+	macAddress: string,
+	aliases: string[],
+	// Remaining keys — passed through as-is.
+	extra: { [key in string]: unknown },
+};
+
+export type DockerContainerNetworkSettings = {
+	// Connected networks — sorted by name.
+	networks: DockerContainerNetwork[],
+	// Remaining keys — passed through as-is.
+	extra: { [key in string]: unknown },
 };
 
 export type DockerContainerPlatform = {

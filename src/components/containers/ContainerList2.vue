@@ -382,10 +382,10 @@ watch(columnsKey, restoreColumnWidths)
   <DataTable
     ref="table"
     :key="columnsKey"
-    class="container-table"
-    :class="{ 'ungrouped-header': hasUngrouped }"
     v-model:selection="selection"
     v-model:expanded-row-groups="expandedRowGroups"
+    class="container-table"
+    :class="{ 'ungrouped-header': hasUngrouped }"
     :value="rows"
     data-key="key"
     selection-mode="single"

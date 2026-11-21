@@ -1,12 +1,22 @@
 <script setup lang="ts">
-import { Accordion, Button } from 'primevue'
+import { ref, watch } from 'vue'
+import { Button } from 'primevue'
 import { useContainer } from '../../composables/containers'
 import PageContainer from '../common/PageContainer.vue'
 import KeyValueTable from '../common/KeyValueTable.vue'
-import AccordionItem from '../common/AccordionItem.vue'
+import { useBackendStore } from '../../stores/backend'
+import { DockerContainerDetails } from '../../tauri/bindings.gen'
 
 const { id } = defineProps<{ readonly id: string }>()
 const container = useContainer(id)
+const backend = useBackendStore()
+const details = ref<DockerContainerDetails | null>(null)
+
+watch(
+  () => id,
+  async (containerId) => (details.value = await backend.getContainerDetails(containerId)),
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -19,11 +29,7 @@ const container = useContainer(id)
           { label: 'Image', value: container.image, valueStyle: { fontFamily: 'monospace' } },
         ]"
       />
-      <Accordion>
-        <AccordionItem value="labels" label="Labels">
-          <KeyValueTable class="mono" :rows="[]" />
-        </AccordionItem>
-      </Accordion>
+      <pre style="font-family: monospace; overflow: auto">{{ JSON.stringify(details, null, 2) }}</pre>
       <Button>Logs</Button>
     </template>
     <template v-else>

@@ -4,6 +4,7 @@ import {
   DockerComposeProject,
   DockerContainer,
   DockerContainerAction,
+  DockerContainerDetails,
   DockerContainerStats,
   DockerProjectAction,
   DockerStatus,
@@ -56,6 +57,33 @@ export const useBackendStore = defineStore('backend', () => {
     return true
   }
 
+  const getContainerDetails = async (id: string): Promise<DockerContainerDetails | null> => {
+    try {
+      const result = await commands.getContainerDetails(id)
+      if (result.status !== 'ok') {
+        notify({
+          level: 'warn',
+          title: `Docker container details failed — Status: ${result.status}`,
+          content: result.error,
+          toastMs: 10_000,
+        })
+
+        return null
+      }
+
+      return result.data
+    } catch (err) {
+      notify({
+        level: 'warn',
+        title: 'Docker container details error',
+        content: err instanceof Error ? err.message : String(err),
+        toastMs: 10_000,
+      })
+
+      return null
+    }
+  }
+
   const runProjectAction = async (action: DockerProjectAction, project: string): Promise<boolean> => {
     try {
       const result = await commands.runProjectAction(action, project)
@@ -96,6 +124,7 @@ export const useBackendStore = defineStore('backend', () => {
     stats,
     findContainer,
     findProject,
+    getContainerDetails,
     runContainerAction,
     runProjectAction,
   }

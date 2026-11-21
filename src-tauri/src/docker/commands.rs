@@ -9,9 +9,10 @@ use crate::utils::string::split_comma;
 use super::cli::Docker;
 use super::types::{
     DockerClientVersion, DockerComposeProject, DockerContainer, DockerContainerAction,
-    DockerContainerComposeInfo, DockerContainerPlatform, DockerContainerResult,
-    DockerContainerState, DockerContainerStats, DockerNetworkBinding, DockerProjectAction,
-    DockerServerVersion, DockerStatus,
+    DockerContainerComposeInfo, DockerContainerConfig, DockerContainerDetails,
+    DockerContainerMount, DockerContainerNetwork, DockerContainerNetworkSettings,
+    DockerContainerPlatform, DockerContainerResult, DockerContainerState, DockerContainerStats,
+    DockerNetworkBinding, DockerProjectAction, DockerServerVersion, DockerStatus, JsonObject,
 };
 
 #[derive(Deserialize)]
@@ -92,6 +93,62 @@ struct DockerContainerStatsRaw {
     pids: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct DockerContainerInspectRaw {
+    config: DockerContainerInspectConfigRaw,
+    network_settings: Option<DockerContainerInspectNetworkSettingsRaw>,
+    mounts: Option<Vec<DockerContainerInspectMountRaw>>,
+    #[serde(flatten)]
+    extra: JsonObject,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "PascalCase")]
+struct DockerContainerInspectNetworkSettingsRaw {
+    networks: Option<BTreeMap<String, DockerContainerInspectNetworkRaw>>,
+    #[serde(flatten)]
+    extra: JsonObject,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "PascalCase", default)]
+struct DockerContainerInspectNetworkRaw {
+    #[serde(rename = "NetworkID")]
+    network_id: String,
+    #[serde(rename = "IPAddress")]
+    ip_address: String,
+    gateway: String,
+    mac_address: String,
+    aliases: Option<Vec<String>>,
+    #[serde(flatten)]
+    extra: JsonObject,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "PascalCase", default)]
+struct DockerContainerInspectMountRaw {
+    #[serde(rename = "Type")]
+    kind: String,
+    name: Option<String>,
+    source: String,
+    destination: String,
+    mode: String,
+    #[serde(rename = "RW")]
+    rw: bool,
+    #[serde(flatten)]
+    extra: JsonObject,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct DockerContainerInspectConfigRaw {
+    labels: Option<BTreeMap<String, String>>,
+    env: Option<Vec<String>>,
+    #[serde(flatten)]
+    extra: JsonObject,
+}
+
 #[derive(Default)]
 struct DockerComposeCollector {
     /// Total container count.
@@ -142,9 +199,9 @@ pub fn get_status() -> Result<DockerStatus, String> {
 pub fn get_containers() -> Result<DockerContainerResult, String> {
     let raw: Vec<DockerContainerRaw> = Docker::cmd("ps").arg("-a").json().run_ndjson()?;
     let mut containers: Vec<DockerContainer> = raw.into_iter().map(Into::into).collect();
-    containers.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    containers.sort_by_key(|a| a.name.to_lowercase());
     let mut projects = build_compose_projects(&containers);
-    projects.sort_by(|a, b| a.project.to_lowercase().cmp(&b.project.to_lowercase()));
+    projects.sort_by_key(|a| a.project.to_lowercase());
     Ok(DockerContainerResult {
         containers,
         projects,
@@ -204,6 +261,17 @@ pub fn get_container_stats() -> Result<Vec<DockerContainerStats>, String> {
         .run_ndjson()?;
 
     Ok(raw.into_iter().map(Into::into).collect())
+}
+
+pub fn get_container_details(id: &str) -> Result<DockerContainerDetails, String> {
+    let raw: Vec<DockerContainerInspectRaw> = Docker::cmd("container")
+        .args(["inspect", "--", id])
+        .run_json()?;
+
+    raw.into_iter()
+        .next()
+        .map(Into::into)
+        .ok_or_else(|| format!("Docker container not found: {}", id))
 }
 
 fn get_container(id: &str) -> Result<DockerContainer, String> {
@@ -366,7 +434,7 @@ fn parse_ports(s: &str, only_bound: bool) -> Vec<DockerNetworkBinding> {
 
 fn parse_current_available(s: &str) -> (Option<String>, Option<String>) {
     let parts: Vec<&str> = s.split('/').map(str::trim).collect();
-    let current = parts.get(0).map(|s| (*s).to_owned());
+    let current = parts.first().map(|s| (*s).to_owned());
     let available = parts.get(1).map(|s| (*s).to_owned());
     (current, available)
 }
@@ -432,6 +500,66 @@ impl From<DockerContainerRaw> for DockerContainer {
     }
 }
 
+impl From<DockerContainerInspectRaw> for DockerContainerDetails {
+    fn from(raw: DockerContainerInspectRaw) -> Self {
+        let env = raw
+            .config
+            .env
+            .unwrap_or_default()
+            .into_iter()
+            .map(|e| match e.split_once('=') {
+                Some((k, v)) => (k.to_string(), v.to_string()),
+                None => (e, String::new()),
+            })
+            .collect();
+
+        let network_settings = raw.network_settings.unwrap_or_default();
+        let networks = network_settings
+            .networks
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(name, n)| DockerContainerNetwork {
+                name,
+                id: n.network_id,
+                ip_address: n.ip_address,
+                gateway: n.gateway,
+                mac_address: n.mac_address,
+                aliases: n.aliases.unwrap_or_default(),
+                extra: n.extra,
+            })
+            .collect();
+
+        let mounts = raw
+            .mounts
+            .unwrap_or_default()
+            .into_iter()
+            .map(|m| DockerContainerMount {
+                kind: m.kind,
+                name: m.name,
+                source: m.source,
+                destination: m.destination,
+                mode: m.mode,
+                read_write: m.rw,
+                extra: m.extra,
+            })
+            .collect();
+
+        DockerContainerDetails {
+            config: DockerContainerConfig {
+                labels: raw.config.labels.unwrap_or_default(),
+                env,
+                extra: raw.config.extra,
+            },
+            network_settings: DockerContainerNetworkSettings {
+                networks,
+                extra: network_settings.extra,
+            },
+            mounts,
+            extra: raw.extra,
+        }
+    }
+}
+
 impl From<DockerContainerStatsRaw> for DockerContainerStats {
     fn from(raw: DockerContainerStatsRaw) -> Self {
         let (mem_usage_current, mem_usage_available) = parse_current_available(&raw.mem_usage);
@@ -457,8 +585,69 @@ mod tests {
     use super::*;
 
     #[test]
+    fn details_parses_env_and_null_labels() {
+        // Arrange
+        let json = r#"{"Config":{"Labels":null,"Env":["A=1","B=x=y","C"]}}"#;
+
+        // Act
+        let raw: DockerContainerInspectRaw = serde_json::from_str(json).unwrap();
+        let details: DockerContainerDetails = raw.into();
+
+        // Assert
+        assert!(details.config.labels.is_empty());
+        assert_eq!(details.config.env["A"], "1");
+        assert_eq!(details.config.env["B"], "x=y");
+        assert_eq!(details.config.env["C"], "");
+        assert!(details.network_settings.networks.is_empty());
+        assert!(details.mounts.is_empty());
+        assert!(details.extra.is_empty());
+    }
+
+    #[test]
+    fn details_parses_networks_and_mounts() {
+        // Arrange
+        let json = r#"{
+                "Config": {"Labels": {}, "Env": [], "User": "app"},
+                "RestartCount": 2,
+                "NetworkSettings": {"SandboxKey": "/var/run/docker/netns/x", "Networks": {
+                    "b-net": {"NetworkID": "n2", "IPAddress": "", "Gateway": "", "MacAddress": "", "Aliases": null},
+                    "a-net": {"NetworkID": "n1", "IPAddress": "172.18.0.2", "Gateway": "172.18.0.1", "MacAddress": "02:42", "Aliases": ["db"]}
+                }},
+                "Mounts": [
+                    {"Type": "volume", "Name": "data", "Source": "/var/lib/docker/volumes/data/_data", "Destination": "/data", "Driver": "local", "Mode": "z", "RW": true, "Propagation": ""},
+                    {"Type": "bind", "Source": "/src", "Destination": "/app", "Mode": "", "RW": false, "Propagation": "rprivate"}
+                ]
+            }"#;
+
+        // Act
+        let raw: DockerContainerInspectRaw = serde_json::from_str(json).unwrap();
+        let details: DockerContainerDetails = raw.into();
+
+        // Assert
+        assert_eq!(details.network_settings.networks[0].name, "a-net");
+        assert_eq!(details.network_settings.networks[0].aliases, vec!["db"]);
+        assert!(details.network_settings.networks[1].aliases.is_empty());
+        assert_eq!(details.mounts[0].name.as_deref(), Some("data"));
+        assert_eq!(details.mounts[1].name, None);
+        assert!(!details.mounts[1].read_write);
+        assert_eq!(details.extra.len(), 1);
+        assert_eq!(details.extra["RestartCount"], 2);
+        assert_eq!(details.config.extra["User"], "app");
+        assert_eq!(
+            details.network_settings.extra["SandboxKey"],
+            "/var/run/docker/netns/x"
+        );
+        assert!(details.network_settings.networks[0].extra.is_empty());
+        assert_eq!(details.mounts[0].extra["Driver"], "local");
+        assert_eq!(details.mounts[1].extra["Propagation"], "rprivate");
+    }
+
+    #[test]
     fn version_returns_client_info() {
+        // Act
         let result = get_status();
+
+        // Assert
         assert!(result.is_ok(), "version() failed: {:?}", result.err());
         let json = serde_json::to_value(result.unwrap()).unwrap();
         let client = json.get("client").expect("missing client");
