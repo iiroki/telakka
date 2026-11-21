@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Button, Column, DataTable, IconField, InputIcon, InputText } from 'primevue'
-import { computed, onUnmounted, ref, StyleValue, type ComponentPublicInstance } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, StyleValue, watch, type ComponentPublicInstance } from 'vue'
 import { storeToRefs } from 'pinia'
 import {
   DockerComposeProject as ProjectData,
@@ -19,7 +19,7 @@ import { useUiStore, zTableOptions } from '../../stores/ui.ts'
 import { useShortcut } from '../../composables/shortcuts.ts'
 import { log } from '../../utils/log.ts'
 import { createStyle } from '../../utils/style.ts'
-import type { TableColumn } from '../types.ts'
+import type { TableColumn, TableColumnState } from '../types.ts'
 
 /** Container data with only the structural fields. */
 type ContainerData = Pick<DockerContainer, 'id' | 'name' | 'state' | 'image' | 'ports' | 'receiptDurable'> & {
@@ -79,10 +79,9 @@ const toContainerData = (c: DockerContainer, useProjectService = true): Containe
 
 /** Currently active hover tooltip. */
 const hoverTooltip = ref<string | null>(null)
-const buildHoverTooltip = (data: TooltipTarget, type: TooltipKey): string | null => {
-  if (type === 'state') {
-    // Container
-    if (isContainerData(data)) {
+const buildContainerTooltip = (data: ContainerData, type: TooltipKey): string | null => {
+  switch (type) {
+    case 'state': {
       const live = findContainer(data.id).value
       if (!live) {
         return '???'
@@ -90,34 +89,35 @@ const buildHoverTooltip = (data: TooltipTarget, type: TooltipKey): string | null
 
       return ['[Container]', live.state, live.status + ' ' + live.statusDetail].filter(Boolean).join('\n')
     }
-
-    // Project
-    return ['[Project]', data.state].filter(Boolean).join('\n')
-  } else if (type === 'name') {
-    if (isContainerData(data)) {
+    case 'name':
       return findContainer(data.id).value?.name ?? null
-    }
-
-    return data.project
-  } else if (type === 'id') {
-    if (isContainerData(data)) {
+    case 'id':
       return data.id
-    }
-  } else if (type === 'image') {
-    if (isContainerData(data)) {
+    case 'image':
       return data.image
-    }
-  } else if (type === 'ports') {
-    if (isContainerData(data)) {
+    case 'ports':
       return data.ports
         .filter((p) => !!p.hostPort)
         .map((p) => `${p.hostPort}:${p.containerPort} (${p.protocol})`)
         .join('\n')
-    }
+    default:
+      return null
   }
-
-  return null
 }
+
+const buildProjectTooltip = (data: ProjectData, type: TooltipKey): string | null => {
+  switch (type) {
+    case 'state':
+      return ['[Project]', data.state].filter(Boolean).join('\n')
+    case 'name':
+      return data.project
+    default:
+      return null
+  }
+}
+
+const buildHoverTooltip = (data: TooltipTarget, type: TooltipKey): string | null =>
+  isContainerData(data) ? buildContainerTooltip(data, type) : buildProjectTooltip(data, type)
 
 const onHoverTooltip = (data: TooltipTarget, type: TooltipKey) => {
   hoverTooltip.value = buildHoverTooltip(data, type)
@@ -152,32 +152,31 @@ const handleProjectSelect = (project: string) => {
 
 //
 // COLUMN RESIZE:
-// Custom resize logic to prevent text selection while resizing columns.
-// PrimeVue does not seem to provide any built-in solutions for that,
-// so this is the end result of that...
+// DataTable restores column widths only in its own stateful mode (local/session storage),
+// so the widths are stored in the UI store and fed back to its restore logic.
 //
+// It also sets "user-select" only once the drag is already under way,
+// which leaves the selection that started on the initial press running, hence the "selectstart" guard.
+//
+
+/** DataTable internals used for restoring the column widths, not part of its public types. */
+type ResizableTable = ComponentPublicInstance & {
+  columnWidthsState: string | null
+  restoreColumnWidths: () => void
+}
 
 const table = ref<ComponentPublicInstance | null>(null)
 const isResizing = ref(false)
+
+const getHeaders = (): HTMLElement[] => {
+  const root = table.value?.$el as HTMLElement | undefined
+  return [...(root?.querySelectorAll<HTMLElement>('thead > tr > th') ?? [])]
+}
 
 const onResizeStart = (e: PointerEvent) => {
   if ((e.target as HTMLElement).classList.contains('p-datatable-column-resizer')) {
     isResizing.value = true
   }
-}
-
-const onResizeEnd = () => {
-  isResizing.value = false
-
-  const root = table.value?.$el as HTMLElement | undefined
-  const headers = [...(root?.querySelectorAll<HTMLElement>('thead > tr > th') ?? [])]
-  const total = headers.reduce((sum, h) => sum + h.offsetWidth, 0)
-  if (total === 0) {
-    return
-  }
-
-  const widths = headers.map((h) => h.offsetWidth / total)
-  ui.set(UI_OPTIONS_KEY, { columns: { widths } })
 }
 
 const preventSelect = (e: Event) => {
@@ -186,13 +185,49 @@ const preventSelect = (e: Event) => {
   }
 }
 
-document.addEventListener('selectstart', preventSelect)
-onUnmounted(() => document.removeEventListener('selectstart', preventSelect))
-ui.get(UI_OPTIONS_KEY, zTableOptions)
+const onResizeEnd = () => {
+  isResizing.value = false
+
+  const headers = getHeaders()
+  const total = headers.reduce((sum, h) => sum + h.offsetWidth, 0)
+  const visibleKeys = columnState.value.filter((s) => s.visible).map((s) => s.key)
+  if (total === 0 || headers.length !== visibleKeys.length) {
+    return
+  }
+
+  const widths = new Map(visibleKeys.map((key, i) => [key, headers[i].offsetWidth / total]))
+  columnState.value = columnState.value.map((s) => ({ ...s, width: widths.get(s.key) ?? s.width }))
+}
+
+/**
+ * Widths of the hidden columns are left out, and the remaining ratios are scaled back up to the table width.
+ * Columns without a stored width leave the whole table on the default widths.
+ */
+const restoreColumnWidths = async () => {
+  await nextTick()
+
+  const instance = table.value as ResizableTable | null
+  const headers = getHeaders()
+  const ratios = columnState.value.filter((s) => s.visible).map((s) => s.width)
+  if (!instance || headers.length === 0 || headers.length !== ratios.length || ratios.some((r) => !r)) {
+    return
+  }
+
+  const total = headers.reduce((sum, h) => sum + h.offsetWidth, 0)
+  const ratioTotal = ratios.reduce((sum: number, r) => sum + (r ?? 0), 0)
+  instance.columnWidthsState = ratios.map((r) => Math.round(((r ?? 0) / ratioTotal) * total)).join(',')
+  instance.restoreColumnWidths()
+}
 
 //
 // DATA
 //
+
+/** Fields the search filter is matched against, lowercased filter. */
+const matchesFilter = (container: DockerContainer, filter: string): boolean =>
+  [container.name, container.image, ...container.ports.map((p) => `${p.hostPort ?? ''}:${p.containerPort}`)].some((v) =>
+    v.toLowerCase().includes(filter),
+  )
 
 /**
  * Cache of rows by container ID. Rows can be reused when `receiptDurable` is unchanged,
@@ -213,28 +248,19 @@ const rows = computed<ContainerRow[]>(() => {
   const grouped = new Map<string, ContainerRow[]>()
 
   for (const container of containers.value) {
-    const filterFields = [
-      container.name,
-      container.image,
-      ...container.ports.map((p) => `${p.hostPort ?? ''}:${p.containerPort}`),
-    ]
-
-    if (filter && !filterFields.some((v) => v.toLowerCase().includes(filter))) {
+    if (filter && !matchesFilter(container, filter)) {
       continue
     }
 
     const group = groupByProject.value ? (container.compose?.project ?? UNGROUPED_KEY) : UNGROUPED_KEY
     const cached = cache.get(container.id)
-    const useCached = !!cached && cached.group === group && cached.data.receiptDurable === container.receiptDurable
+    const isCacheValid = !!cached && cached.group === group && cached.data.receiptDurable === container.receiptDurable
 
-    let row: ContainerRow
-    if (useCached) {
-      row = cached
-    } else {
-      row = { key: container.id, group, data: toContainerData(container, groupByProject.value) }
-      cache.set(container.id, row)
-    }
+    const row = isCacheValid
+      ? cached
+      : { key: container.id, group, data: toContainerData(container, groupByProject.value) }
 
+    cache.set(container.id, row)
     stale.delete(container.id)
 
     if (group === UNGROUPED_KEY) {
@@ -288,17 +314,21 @@ const COLUMNS: ContainerColumn[] = [
 const DEFAULT_VISIBLE_COLUMNS: ContainerColumnKey[] = ['name', 'image', 'ports']
 
 const columnMap = new Map(COLUMNS.map((col) => [col.key, col]))
-const columnOrder = ref<ContainerColumnKey[]>(COLUMNS.map((col) => col.key))
-const visibleColumnKeys = ref<ContainerColumnKey[]>([...DEFAULT_VISIBLE_COLUMNS])
+
+const defaultColumnState = (): TableColumnState<ContainerColumnKey>[] =>
+  COLUMNS.map((col) => ({ key: col.key, visible: DEFAULT_VISIBLE_COLUMNS.includes(col.key) }))
+
+const columnState = ref<TableColumnState<ContainerColumnKey>[]>(defaultColumnState())
 
 const columns = computed<ContainerColumn[]>(() =>
-  columnOrder.value
-    .filter((key) => visibleColumnKeys.value.includes(key))
-    .flatMap((key) => columnMap.get(key) ?? [])
+  columnState.value
+    .filter((state) => state.visible)
+    .flatMap((state) => columnMap.get(state.key) ?? [])
     .map((col, index) => ({
       ...col,
       index,
       bodyStyle: {
+        // "maxWidth" = 0 kills content-driven column growth
         ...(col.value ? { maxWidth: 0 } : undefined),
         ...(col.monospace ? MONOSPACE_STYLE : undefined),
         ...col.bodyStyle,
@@ -314,17 +344,46 @@ const columnsKey = computed(() => columns.value.map((col) => col.key).join('-'))
 
 const OPTIONS = [{ key: 'actions', label: 'Show actions' }]
 
-const options = ref<Record<string, boolean>>({ actions: true })
-const showActions = computed(() => options.value.actions)
+const columnOptions = ref<Record<string, boolean>>({ actions: true })
+const showActions = computed(() => columnOptions.value.actions)
 
-// Notes:
-// - "maxWidth" = 0 kills content-driven column growth
+const isColumnKey = (key: string): key is ContainerColumnKey => COLUMNS.some((col) => col.key === key)
+
+/** Stored columns keep their order, and the ones missing from them are appended with their default visibility. */
+const toColumnState = (stored: TableColumnState[]): TableColumnState<ContainerColumnKey>[] => {
+  const known = stored.flatMap((s) => (isColumnKey(s.key) ? [{ ...s, key: s.key }] : []))
+  const missing = defaultColumnState().filter((s) => !known.some((k) => k.key === s.key))
+  return [...known, ...missing]
+}
+
+const saveTableOptions = () => ui.set(UI_OPTIONS_KEY, { columns: columnState.value, options: columnOptions.value })
+
+onMounted(async () => {
+  document.addEventListener('selectstart', preventSelect)
+
+  const stored = await ui.get(UI_OPTIONS_KEY, zTableOptions)
+  if (stored?.columns?.length) {
+    columnState.value = toColumnState(stored.columns)
+  }
+
+  // Options missing from the stored ones keep their default
+  columnOptions.value = { ...columnOptions.value, ...stored?.options }
+  await restoreColumnWidths()
+  watch([columnState, columnOptions], saveTableOptions)
+})
+
+onUnmounted(() => document.removeEventListener('selectstart', preventSelect))
+
+// Changing the columns remounts the table, which drops the restored widths
+watch(columnsKey, restoreColumnWidths)
 </script>
 
 <template>
   <DataTable
     ref="table"
     :key="columnsKey"
+    class="container-table"
+    :class="{ 'ungrouped-header': hasUngrouped }"
     v-model:selection="selection"
     v-model:expanded-row-groups="expandedRowGroups"
     :value="rows"
@@ -336,8 +395,6 @@ const showActions = computed(() => options.value.actions)
     :row-class="rowClass"
     resizable-columns
     column-resize-mode="fit"
-    class="container-table"
-    :class="{ 'datatable-resizing': isResizing, 'ungrouped-header': hasUngrouped }"
     :style="{ '--row-actions-width': showActions ? undefined : '0rem' }"
     @row-select="handleSelect"
     @pointerdown.capture="onResizeStart"
@@ -351,9 +408,8 @@ const showActions = computed(() => options.value.actions)
         </IconField>
 
         <TableColumnSelector
-          v-model:order="columnOrder"
-          v-model:visible="visibleColumnKeys"
-          v-model:option-values="options"
+          v-model:column-state="columnState"
+          v-model:option-values="columnOptions"
           :columns="COLUMNS"
           :default-visible="DEFAULT_VISIBLE_COLUMNS"
           :options="OPTIONS"
@@ -545,9 +601,5 @@ const showActions = computed(() => options.value.actions)
 :deep(.p-datatable-column-resizer:hover),
 :deep(.p-datatable-column-resizer-helper) {
   opacity: 1;
-}
-
-.datatable-resizing {
-  user-select: none;
 }
 </style>

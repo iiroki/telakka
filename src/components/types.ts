@@ -24,6 +24,18 @@ export type TableColumnBase<K extends string = string> = {
 }
 
 /**
+ * Table column state: the order is the position in the array.
+ *
+ * `K` = column key union.
+ */
+export type TableColumnState<K extends string = string> = {
+  readonly key: K
+  readonly visible: boolean
+  /** Width as a ratio of the table width. */
+  readonly width?: number
+}
+
+/**
  * Table column definition.
  *
  * `T` = row data, `K` = column key union.

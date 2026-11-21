@@ -7,11 +7,18 @@ import z from 'zod/v4'
 const UI_KEY_PREFIX = 'ui__'
 
 export const zTableOptions = z.object({
+  /** Columns in the order they are rendered in. */
   columns: z
     .object({
-      widths: z.number().array().optional(),
+      key: z.string(),
+      visible: z.boolean(),
+      /** Width as a ratio of the table width. */
+      width: z.number().optional(),
     })
+    .array()
     .optional(),
+  /** Extra table toggles by option key. */
+  options: z.record(z.string(), z.boolean()).optional(),
 })
 
 export type TableOptions = z.infer<typeof zTableOptions>

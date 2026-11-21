@@ -1,7 +1,7 @@
 <script setup lang="ts" generic="K extends string">
 import { Button, Checkbox, Popover } from 'primevue'
 import { computed, ref, useId, type Ref } from 'vue'
-import type { TableColumnBase } from '../types.ts'
+import type { TableColumnBase, TableColumnState } from '../types.ts'
 
 /** Extra option toggle, rendered as a checkbox below the columns. */
 type ExtraOption = {
@@ -18,11 +18,8 @@ const props = defineProps<{
   readonly options?: readonly ExtraOption[]
 }>()
 
-/** All column keys, in the order they are rendered in. */
-const order = defineModel<K[]>('order', { required: true })
-
-/** Keys of the visible columns, order does not matter. */
-const visible = defineModel<K[]>('visible', { required: true })
+/** Columns in the order they are rendered in, each with its visibility. */
+const columnState = defineModel<TableColumnState<K>[]>('columnState', { required: true })
 
 /** Option values by option key. */
 const optionValues = defineModel<Record<string, boolean>>('optionValues', { default: () => ({}) })
@@ -31,61 +28,71 @@ const id = useId()
 const popover = ref<InstanceType<typeof Popover> | null>(null)
 
 /** Changes are saved as drafts until applied, so closing the popover discards them. */
-const draftOrder = ref([...order.value]) as Ref<K[]>
-const draftVisible = ref([...visible.value]) as Ref<K[]>
+const draftState = ref([...columnState.value]) as Ref<TableColumnState<K>[]>
 const draftOptions = ref({ ...optionValues.value })
 
 const columnMap = computed(() => new Map(props.columns.map((c) => [c.key, c])))
-const items = computed(() => draftOrder.value.flatMap((key) => columnMap.value.get(key) ?? []))
 
-/** Locked columns cannot be hidden, so they are always part of the visible keys. */
-const withLocked = (keys: readonly K[]): K[] => [
-  ...new Set([...keys, ...props.columns.filter((c) => c.locked).map((c) => c.key)]),
-]
+/** Draft state joined with the column definitions, both visible and hidden ones. */
+const items = computed(() =>
+  draftState.value.flatMap((state) => {
+    const column = columnMap.value.get(state.key)
+    return column ? [{ ...column, visible: state.visible }] : []
+  }),
+)
+
+/** Locked columns cannot be hidden. Fields the selector does not manage, such as the width, are kept as they are. */
+const withLocked = (state: readonly TableColumnState<K>[]): TableColumnState<K>[] =>
+  state.map((s) => ({ ...s, visible: s.visible || !!columnMap.value.get(s.key)?.locked }))
+
+const serialize = (state: readonly TableColumnState<K>[]) => state.map((s) => `${s.key}:${s.visible}`).join()
 
 const isDirty = computed(
   () =>
-    draftOrder.value.join() !== order.value.join() ||
-    draftVisible.value.filter((k) => !visible.value.includes(k)).length > 0 ||
-    visible.value.filter((k) => !draftVisible.value.includes(k)).length > 0 ||
+    serialize(draftState.value) !== serialize(columnState.value) ||
     (props.options ?? []).some((o) => !!draftOptions.value[o.key] !== !!optionValues.value[o.key]),
 )
+
+const hasVisible = computed(() => draftState.value.some((s) => s.visible))
 
 const toggle = (event: Event) => popover.value?.toggle(event)
 
 const syncDraft = () => {
-  draftOrder.value = [...order.value]
-  draftVisible.value = withLocked(visible.value)
+  draftState.value = withLocked(columnState.value)
   draftOptions.value = { ...optionValues.value }
 }
 
 const apply = () => {
-  order.value = [...draftOrder.value]
-  visible.value = withLocked(draftVisible.value)
+  columnState.value = withLocked(draftState.value)
   optionValues.value = { ...draftOptions.value }
   popover.value?.hide()
 }
 
+/** Locked columns stay in place, which also blocks their neighbours from moving past them. */
 const canMove = (index: number, offset: number) => {
   const to = index + offset
-  return to >= 0 && to < items.value.length && !items.value[index].locked && !items.value[to].locked
+  const columns = items.value
+  return to >= 0 && to < columns.length && !columns[index].locked && !columns[to].locked
 }
 
 const move = (index: number, offset: number) => {
-  const to = index + offset
   if (!canMove(index, offset)) {
     return
   }
 
-  const keys = [...draftOrder.value]
-  const [moved] = keys.splice(index, 1)
-  keys.splice(to, 0, moved)
-  draftOrder.value = keys
+  const state = [...draftState.value]
+  const [moved] = state.splice(index, 1)
+  state.splice(index + offset, 0, moved)
+  draftState.value = state
+}
+
+const setVisible = (index: number, visible: boolean) => {
+  draftState.value = draftState.value.map((state, i) => (i === index ? { ...state, visible } : state))
 }
 
 const reset = () => {
-  draftOrder.value = props.columns.map((c) => c.key)
-  draftVisible.value = withLocked(props.defaultVisible ?? props.columns.map((c) => c.key))
+  const visibleKeys = props.defaultVisible ?? props.columns.map((c) => c.key)
+  draftState.value = withLocked(props.columns.map((c) => ({ key: c.key, visible: visibleKeys.includes(c.key) })))
   draftOptions.value = Object.fromEntries((props.options ?? []).map((o) => [o.key, o.default ?? true]))
 }
 </script>
@@ -102,7 +109,13 @@ const reset = () => {
 
       <div class="selector-items">
         <div v-for="(col, index) in items" :key="col.key" class="selector-item">
-          <Checkbox v-model="draftVisible" :value="col.key" :input-id="`${id}-${col.key}`" :disabled="col.locked" />
+          <Checkbox
+            :model-value="col.visible"
+            :input-id="`${id}-${col.key}`"
+            :disabled="col.locked"
+            binary
+            @update:model-value="setVisible(index, !!$event)"
+          />
           <label :for="`${id}-${col.key}`">{{ col.header ?? col.key }}</label>
 
           <span class="selector-move">
@@ -135,13 +148,7 @@ const reset = () => {
       </div>
 
       <div class="selector-footer">
-        <Button
-          icon="pi pi-check"
-          label="Apply"
-          size="small"
-          :disabled="!isDirty || draftVisible.length === 0"
-          @click="apply"
-        />
+        <Button icon="pi pi-check" label="Apply" size="small" :disabled="!isDirty || !hasVisible" @click="apply" />
       </div>
     </div>
   </Popover>
@@ -165,12 +172,20 @@ const reset = () => {
   font-weight: 500;
 }
 
-.selector-items {
+.selector-items,
+.selector-options {
   display: flex;
   flex-direction: column;
   padding: 0.25rem;
+}
+
+.selector-items {
   max-height: 20rem;
   overflow: auto;
+}
+
+.selector-options {
+  border-top: 1px solid var(--p-content-border-color);
 }
 
 .selector-item {
@@ -188,6 +203,13 @@ const reset = () => {
   background-color: color-mix(in srgb, var(--p-text-color) 8%, var(--p-content-background));
 }
 
+.selector-item label {
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .selector-move {
   display: flex;
   margin-left: auto;
@@ -199,25 +221,11 @@ const reset = () => {
   padding: 0;
 }
 
-.selector-options {
-  display: flex;
-  flex-direction: column;
-  padding: 0.25rem;
-  border-top: 1px solid var(--p-content-border-color);
-}
-
 .selector-footer {
   display: flex;
   justify-content: flex-end;
   padding: 0.5rem;
   border-top: 1px solid var(--p-content-border-color);
-}
-
-.selector-item label {
-  cursor: pointer;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* PrimeIcons sit slightly low in their em box next to a button label */
